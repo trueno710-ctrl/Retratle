@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getStockPrice, getTopMovers, getStockInfo } from "@/lib/jquants"
+import { getStockPrice, getTopMovers } from "@/lib/jquants"
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -13,10 +13,6 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: true, data: movers })
     }
 
-    if (action === "info" && ticker) {
-      const info = await getStockInfo(ticker)
-      return NextResponse.json({ success: true, data: info })
-    }
 
     if (ticker) {
       const price = await getStockPrice(ticker)

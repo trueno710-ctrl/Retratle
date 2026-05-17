@@ -11,6 +11,7 @@ interface Tweet {
     like_count: number
     retweet_count: number
     reply_count: number
+    impression_count: number
   }
 }
 
@@ -75,28 +76,104 @@ export async function searchRecentTweets(query: string, count = 10): Promise<Twe
   }
 }
 
+// 2026年実際の政策に基づくモックデータ
 export function getMockMinistryPosts() {
+  const now = Date.now()
   return [
     {
       ministry: "経済産業省",
       handle: "meti_NIPPON",
       posts: [
-        { id: "1", text: "【重要】半導体産業への支援強化策を発表。国内製造拠点の整備に向け、2024年度補正予算で2兆円規模の補助金を措置。TSMC熊本工場第2棟建設を含む戦略的半導体産業基盤強化プログラムを推進します。#経済産業省 #半導体", created_at: new Date(Date.now() - 3600000).toISOString(), public_metrics: { like_count: 1234, retweet_count: 567, reply_count: 89 } },
-        { id: "2", text: "再生可能エネルギーの導入促進に向け、洋上風力発電の公募条件を見直し。2030年までに45GW達成に向けた新たなロードマップを策定。関連事業者との連携を強化します。#再エネ #GX", created_at: new Date(Date.now() - 7200000).toISOString(), public_metrics: { like_count: 892, retweet_count: 312, reply_count: 45 } },
+        {
+          id: "meti_1",
+          text: "【半導体・AI産業基盤強化】本日、ラピダスへの追加支援として2,000億円規模の補助金交付を決定。2027年の2nmチップ量産に向けた国内半導体エコシステム構築を加速します。関連サプライヤーとの連携体制も強化。#半導体 #AI #経済安全保障",
+          created_at: new Date(now - 2 * 3600000).toISOString(),
+          public_metrics: { like_count: 2840, retweet_count: 1230, reply_count: 187, impression_count: 145000 },
+        },
+        {
+          id: "meti_2",
+          text: "【DX銘柄2026】経済産業省・東証が共同選定する「DX銘柄2026」を発表。DXプラチナ企業2社、DX銘柄30社を選定。デジタル技術を活用した事業変革を推進する企業を積極的に支援します。#DX銘柄 #DX",
+          created_at: new Date(now - 6 * 3600000).toISOString(),
+          public_metrics: { like_count: 1560, retweet_count: 678, reply_count: 95, impression_count: 89000 },
+        },
+        {
+          id: "meti_3",
+          text: "【フィジカルAI推進】政府の「AI・ロボット産業振興計画」に基づき、製造現場でのAI・ロボット活用に3,873億円を投資。自動化・省人化技術の開発・実装を支援します。2030年までに製造業の生産性30%向上を目指します。#フィジカルAI #産業ロボット",
+          created_at: new Date(now - 10 * 3600000).toISOString(),
+          public_metrics: { like_count: 1890, retweet_count: 823, reply_count: 134, impression_count: 112000 },
+        },
       ],
     },
     {
       ministry: "デジタル庁",
       handle: "digital_jpn",
       posts: [
-        { id: "3", text: "マイナンバーカードと健康保険証の一体化について、2024年12月から本格運用を開始。全国の医療機関・薬局でのオンライン資格確認を義務化。デジタル行政推進の重要なマイルストーンです。#マイナ保険証 #デジタル庁", created_at: new Date(Date.now() - 1800000).toISOString(), public_metrics: { like_count: 2100, retweet_count: 890, reply_count: 234 } },
+        {
+          id: "digital_1",
+          text: "【医療DX】全国の病院・診療所での電子カルテ情報共有サービス（EHRS）の本格稼働を開始。マイナ保険証と連携し、患者の医療情報を安全に共有。医療の質向上と効率化に貢献します。参加医療機関数 12,000施設突破。#医療DX #マイナ保険証",
+          created_at: new Date(now - 1 * 3600000).toISOString(),
+          public_metrics: { like_count: 3450, retweet_count: 1560, reply_count: 289, impression_count: 198000 },
+        },
+        {
+          id: "digital_2",
+          text: "【ガバメントクラウド】政府情報システムのクラウド移行が80%完了。2026年度末までに全府省のシステムをガバメントクラウドへ移行完了予定。行政コストの大幅削減と住民サービス向上を実現します。#行政DX #ガバメントクラウド",
+          created_at: new Date(now - 5 * 3600000).toISOString(),
+          public_metrics: { like_count: 1230, retweet_count: 445, reply_count: 67, impression_count: 56000 },
+        },
       ],
     },
     {
       ministry: "環境省",
       handle: "Kankyo_Jpn",
       posts: [
-        { id: "4", text: "カーボンニュートラル2050実現に向けたGX（グリーントランスフォーメーション）推進法が施行。炭素税導入の段階的スケジュールと排出量取引市場の整備計画を公表しました。#GX #カーボンニュートラル", created_at: new Date(Date.now() - 5400000).toISOString(), public_metrics: { like_count: 756, retweet_count: 289, reply_count: 67 } },
+        {
+          id: "env_1",
+          text: "【GX排出量取引市場】本年4月から本格稼働した国内排出量取引市場（GX-ETS）の取引量が順調に拡大。炭素価格は1トンあたり3,200円に上昇。再エネ・省エネ投資を後押しする炭素価格メカニズムが機能し始めています。#GX #カーボンプライシング #脱炭素",
+          created_at: new Date(now - 3 * 3600000).toISOString(),
+          public_metrics: { like_count: 892, retweet_count: 334, reply_count: 78, impression_count: 48000 },
+        },
+        {
+          id: "env_2",
+          text: "【ペロブスカイト太陽電池】国内メーカーと連携し、ペロブスカイト太陽電池の実証事業を全国10カ所で開始。軽量・フレキシブルな次世代太陽電池の早期実用化を目指します。2030年の太陽光発電コスト目標7円/kWh達成に貢献。#ペロブスカイト #再エネ",
+          created_at: new Date(now - 8 * 3600000).toISOString(),
+          public_metrics: { like_count: 1450, retweet_count: 612, reply_count: 89, impression_count: 72000 },
+        },
+      ],
+    },
+    {
+      ministry: "防衛省",
+      handle: "ModJapan_jp",
+      posts: [
+        {
+          id: "mod_1",
+          text: "【防衛DX推進】令和8年度防衛予算において防衛DX関連に3,200億円を配分。AI・ドローン・サイバー・宇宙領域の防衛能力強化を加速します。国内防衛産業の育成と技術基盤強化にも重点投資します。#防衛 #防衛DX #安全保障",
+          created_at: new Date(now - 4 * 3600000).toISOString(),
+          public_metrics: { like_count: 4200, retweet_count: 1890, reply_count: 356, impression_count: 245000 },
+        },
+      ],
+    },
+    {
+      ministry: "国土交通省",
+      handle: "MLIT_JAPAN",
+      posts: [
+        {
+          id: "mlit_1",
+          text: "【物流DX・2024年問題対応】自動配送ロボット・ドローン配送の社会実装に向けた規制緩和を実施。2030年までに物流自動化率50%を目標とした「物流革新加速化計画」を策定しました。宅配ロッカー設置補助金も拡充。#物流DX #ドローン配送",
+          created_at: new Date(now - 7 * 3600000).toISOString(),
+          public_metrics: { like_count: 2100, retweet_count: 876, reply_count: 145, impression_count: 128000 },
+        },
+      ],
+    },
+    {
+      ministry: "厚生労働省",
+      handle: "MHLWitter",
+      posts: [
+        {
+          id: "mhlw_1",
+          text: "【介護ロボット普及促進】介護ロボット・ICT導入支援補助金の予算を前年比2倍の500億円に拡充。移乗・見守り・排泄支援ロボットの普及を加速し、介護従事者の負担軽減と業務効率化を推進します。#介護ロボット #介護DX",
+          created_at: new Date(now - 9 * 3600000).toISOString(),
+          public_metrics: { like_count: 1340, retweet_count: 567, reply_count: 89, impression_count: 67000 },
+        },
       ],
     },
   ]
