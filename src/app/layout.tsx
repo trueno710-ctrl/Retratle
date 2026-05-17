@@ -25,6 +25,7 @@ const navLinks = [
   { href: "/tenbagger", label: "テンバガー研究所", icon: "🚀" },
   { href: "/weekly-news", label: "週次レポート", icon: "📰" },
   { href: "/price-alerts", label: "値動きアラート", icon: "⚡" },
+  { href: "/economic-calendar", label: "経済カレンダー", icon: "📅" },
 ];
 
 export default function RootLayout({
