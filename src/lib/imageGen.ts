@@ -1,3 +1,28 @@
+/**
+ * fal.ai を使った画像・動画生成（1つの FAL_KEY で完結）
+ * https://fal.ai/docs
+ *
+ * 必要な環境変数:
+ *   FAL_KEY  - fal.ai のAPIキー（https://fal.ai/dashboard/keys）
+ *
+ * 画像: FLUX.1 Pro（DALL-E 3同等品質）
+ * 動画: Kling v1.6（Runway ML同等品質）
+ */
+
+const FAL_BASE = "https://fal.run"
+const FAL_QUEUE = "https://queue.fal.run"
+
+function getKey() {
+  return process.env.FAL_KEY ?? null
+}
+
+function falHeaders(key: string) {
+  return {
+    Authorization: `Key ${key}`,
+    "Content-Type": "application/json",
+  }
+}
+
 export interface GeneratedImage {
   url: string
   revisedPrompt?: string
@@ -10,95 +35,97 @@ export interface VideoJob {
   thumbnailUrl?: string
 }
 
-/** DALL-E 3 で宣伝画像を生成。OPENAI_API_KEY が必要。 */
+/**
+ * FLUX.1 Pro で広告画像を生成。
+ * 同期APIなので結果が直接返ってくる。
+ */
 export async function generateAdImage(prompt: string): Promise<GeneratedImage | null> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) return null
+  const key = getKey()
+  if (!key) return null
 
   try {
-    const res = await fetch("https://api.openai.com/v1/images/generations", {
+    const res = await fetch(`${FAL_BASE}/fal-ai/flux-pro`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: falHeaders(key),
       body: JSON.stringify({
-        model: "dall-e-3",
         prompt,
-        n: 1,
-        size: "1024x1024",
-        quality: "hd",
-        style: "vivid",
+        image_size: "square_hd",   // 1024×1024
+        num_images: 1,
+        enable_safety_checker: true,
       }),
     })
     if (!res.ok) return null
-    const data = await res.json() as { data: Array<{ url: string; revised_prompt?: string }> }
-    const item = data.data?.[0]
-    if (!item) return null
-    return { url: item.url, revisedPrompt: item.revised_prompt }
+    const data = await res.json() as { images: Array<{ url: string }> }
+    const url = data.images?.[0]?.url
+    if (!url) return null
+    return { url, revisedPrompt: prompt }
   } catch {
     return null
   }
 }
 
 /**
- * Runway ML Gen-3 Alpha で画像→動画を生成。
- * RUNWAY_API_KEY が必要。
- * https://docs.runwayml.com
+ * Kling v1.6 で画像→動画を生成（キューベース）。
+ * → jobId を返し、checkVideoStatus でポーリングする。
  */
 export async function startVideoGeneration(
   imageUrl: string,
   motionPrompt: string
 ): Promise<VideoJob | null> {
-  const apiKey = process.env.RUNWAY_API_KEY
-  if (!apiKey) return null
+  const key = getKey()
+  if (!key) return null
 
   try {
-    const res = await fetch("https://api.runwayml.com/v1/image_to_video", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "X-Runway-Version": "2024-11-06",
-      },
-      body: JSON.stringify({
-        promptImage: imageUrl,
-        promptText: motionPrompt,
-        model: "gen3a_turbo",
-        duration: 5,
-        ratio: "1280:768",
-      }),
-    })
+    const res = await fetch(
+      `${FAL_QUEUE}/fal-ai/kling-video/v1.6/standard/image-to-video`,
+      {
+        method: "POST",
+        headers: falHeaders(key),
+        body: JSON.stringify({
+          image_url: imageUrl,
+          prompt: motionPrompt,
+          duration: "5",       // 5秒
+          aspect_ratio: "16:9",
+        }),
+      }
+    )
     if (!res.ok) return null
-    const data = await res.json() as { id: string }
-    return { jobId: data.id, status: "queued" }
+    const data = await res.json() as { request_id: string }
+    if (!data.request_id) return null
+    return { jobId: data.request_id, status: "queued" }
   } catch {
     return null
   }
 }
 
-/** Runway のジョブステータスをポーリング */
+/** Kling のジョブステータスをポーリング */
 export async function checkVideoStatus(jobId: string): Promise<VideoJob | null> {
-  const apiKey = process.env.RUNWAY_API_KEY
-  if (!apiKey) return null
+  const key = getKey()
+  if (!key) return null
 
   try {
-    const res = await fetch(`https://api.runwayml.com/v1/tasks/${jobId}`, {
-      headers: { Authorization: `Bearer ${apiKey}`, "X-Runway-Version": "2024-11-06" },
-    })
-    if (!res.ok) return null
-    const data = await res.json() as {
-      id: string
-      status: string
-      output?: string[]
-      failure?: string
+    // まずステータス確認
+    const statusRes = await fetch(
+      `${FAL_QUEUE}/fal-ai/kling-video/v1.6/standard/image-to-video/requests/${jobId}/status`,
+      { headers: falHeaders(key) }
+    )
+    if (!statusRes.ok) return null
+    const status = await statusRes.json() as { status: string }
+
+    if (status.status === "COMPLETED") {
+      // 結果を取得
+      const resultRes = await fetch(
+        `${FAL_QUEUE}/fal-ai/kling-video/v1.6/standard/image-to-video/requests/${jobId}`,
+        { headers: falHeaders(key) }
+      )
+      if (!resultRes.ok) return { jobId, status: "completed" }
+      const result = await resultRes.json() as { video?: { url: string } }
+      return { jobId, status: "completed", videoUrl: result.video?.url }
     }
-    return {
-      jobId: data.id,
-      status:
-        data.status === "SUCCEEDED" ? "completed"
-        : data.status === "FAILED" ? "failed"
-        : data.status === "RUNNING" ? "processing"
-        : "queued",
-      videoUrl: data.output?.[0],
-    }
+
+    if (status.status === "FAILED") return { jobId, status: "failed" }
+    if (status.status === "IN_PROGRESS") return { jobId, status: "processing" }
+    return { jobId, status: "queued" }
   } catch {
     return null
   }

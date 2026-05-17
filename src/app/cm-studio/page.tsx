@@ -344,7 +344,7 @@ export default function CMStudioPage() {
               <h2 className="text-sm font-semibold text-white">🖼 AI生成画像</h2>
               {imageMock && (
                 <span className="text-xs px-2 py-0.5 rounded" style={{ background: "rgba(245,158,11,0.15)", color: "#f59e0b" }}>
-                  OPENAI_API_KEY 未設定 — プレースホルダー表示
+                  FAL_KEY 未設定 — プレースホルダー表示
                 </span>
               )}
             </div>
@@ -380,7 +380,7 @@ export default function CMStudioPage() {
                 <div className="flex items-center gap-2">
                   {videoJob.mock && (
                     <span className="text-xs px-2 py-0.5 rounded" style={{ background: "rgba(245,158,11,0.15)", color: "#f59e0b" }}>
-                      RUNWAY_API_KEY 未設定 — サンプル動画
+                      FAL_KEY 未設定 — サンプル動画
                     </span>
                   )}
                   <span className="text-xs px-2 py-0.5 rounded"
