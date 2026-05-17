@@ -43,3 +43,6 @@ next-env.d.ts
 # Environment files
 .env.local
 .env*.local
+
+# Daily report data (regenerated at runtime)
+data/daily-reports.json

@@ -21,6 +21,7 @@ export const metadata: Metadata = {
 const navLinks = [
   { href: "/", label: "ダッシュボード", icon: "⬡" },
   { href: "/ministry-monitor", label: "省庁モニター", icon: "🏛" },
+  { href: "/daily-reports", label: "日次レポート", icon: "📋" },
   { href: "/tenbagger", label: "テンバガー研究所", icon: "🚀" },
   { href: "/weekly-news", label: "週次レポート", icon: "📰" },
   { href: "/price-alerts", label: "値動きアラート", icon: "⚡" },
