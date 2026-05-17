@@ -1,0 +1,30 @@
+name: AI Secretary - Monthly Calendar Update
+
+on:
+  schedule:
+    # 毎月1日 午前9時（JST = UTC+9 → UTC 0時）に実行
+    - cron: "0 0 1 * *"
+  workflow_dispatch:
+    # 手動実行も可能
+
+jobs:
+  update-calendar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run AI Secretary
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python scripts/ai_secretary.py

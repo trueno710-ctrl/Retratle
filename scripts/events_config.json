@@ -1,0 +1,68 @@
+{
+  "calendar_id": "primary",
+  "events": [
+    {
+      "id": "tgs",
+      "summary_template": "東京ゲームショウ {year} (TGS {year})",
+      "keywords": ["東京ゲームショウ", "Tokyo Game Show", "TGS"],
+      "location": "幕張メッセ 〒261-8550 千葉県千葉市美浜区中瀬2-1",
+      "color_id": "11",
+      "years": {
+        "2026": {
+          "start": "2026-09-17",
+          "end": "2026-09-22",
+          "confirmed": true,
+          "description": "■ 公式サイト\nhttps://tgs.nikkeibp.co.jp/\n\n■ 会場\n幕張メッセ（千葉県千葉市美浜区中瀬2-1）\n\n■ 開催スケジュール\n・ビジネスデイ（関係者・メディア限定）: 9月17日（木）〜18日（金）\n・一般公開: 9月19日（土）〜21日（月・祝）\n\n■ 備考\n第30回記念大会・史上初の5日間開催\n出展数3,500ブース、来場者30万人規模を予定"
+        },
+        "2027": {
+          "start": "2027-09-18",
+          "end": "2027-09-23",
+          "confirmed": false,
+          "description": "■ 公式サイト\nhttps://tgs.nikkeibp.co.jp/\n\n■ 会場\n幕張メッセ（千葉県千葉市美浜区中瀬2-1）\n\n■ 備考\n⚠️ 日程は過去の傾向による予測値です。正式発表後に更新してください。"
+        }
+      }
+    },
+    {
+      "id": "mobility_show",
+      "summary_template": "ジャパンモビリティショー {year}",
+      "keywords": ["ジャパンモビリティショー", "Japan Mobility Show", "モビリティショー"],
+      "location": "幕張メッセ 〒261-8550 千葉県千葉市美浜区中瀬2-1",
+      "color_id": "7",
+      "years": {
+        "2026": {
+          "start": "2026-10-13",
+          "end": "2026-10-17",
+          "confirmed": true,
+          "description": "■ 公式サイト\nhttps://www.japan-mobility-show.com/\n\n■ 会場\n幕張メッセ（千葉県千葉市美浜区中瀬2-1）\n\n■ 開催スケジュール\n2026年10月13日（火）〜16日（金）\n\n■ 備考\n・2026年はB2B向け「ビズウィーク」形式での開催\n・CEATEC 2026と同時開催\n・一般向け大型コンシューマーショーは2027年を予定\n・主催: 一般社団法人 日本自動車工業会（JAMA）"
+        },
+        "2027": {
+          "start": "2027-10-25",
+          "end": "2027-11-07",
+          "confirmed": false,
+          "description": "■ 公式サイト\nhttps://www.japan-mobility-show.com/\n\n■ 会場\n東京ビッグサイト（予定）\n〒135-0063 東京都江東区有明3-11-1\n\n■ 備考\n⚠️ 2027年は一般向け大型コンシューマーショーを予定\n　日程は過去の傾向による予測値です。正式発表後に更新してください。"
+        }
+      }
+    },
+    {
+      "id": "iphone",
+      "summary_template": "iPhone 新型発売日（予測）",
+      "keywords": ["iPhone 発売", "iPhone release", "iPhone 新型"],
+      "location": "Apple Store 表参道 〒150-0001 東京都渋谷区神宮前4-3-3",
+      "color_id": "9",
+      "years": {
+        "2026": {
+          "start": "2026-09-18",
+          "end": "2026-09-19",
+          "confirmed": false,
+          "description": "■ 公式サイト\nhttps://www.apple.com/jp/iphone/\nhttps://www.apple.com/apple-events/\n\n■ 購入ページ（発売後）\nhttps://www.apple.com/jp/shop/buy-iphone\n\n■ 予測機種（2026年9月発売見込み）\n・iPhone 18 Pro\n・iPhone 18 Pro Max\n・iPhone Fold（折りたたみ型・初代）\n・iPhone 18 Air（薄型モデル）\n\n■ 備考\n⚠️ Apple未発表のため日程は予測値（例年9月第3〜4週に発売）\n　正式発表後に日程を更新してください。"
+        },
+        "2027": {
+          "start": "2027-09-17",
+          "end": "2027-09-18",
+          "confirmed": false,
+          "description": "■ 公式サイト\nhttps://www.apple.com/jp/iphone/\nhttps://www.apple.com/apple-events/\n\n■ 購入ページ（発売後）\nhttps://www.apple.com/jp/shop/buy-iphone\n\n■ 備考\n⚠️ Apple未発表のため日程は予測値（例年9月第3〜4週に発売）\n　正式発表後に日程を更新してください。"
+        }
+      }
+    }
+  ]
+}
