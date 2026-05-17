@@ -101,3 +101,76 @@ export function getMockMinistryPosts() {
     },
   ]
 }
+
+export interface TrendingTopic {
+  rank: number
+  topic: string
+  tweetVolume: number
+  category: "エンタメ" | "テクノロジー" | "ライフスタイル" | "食品・グルメ" | "ファッション" | "スポーツ" | "ニュース" | "季節イベント"
+  affiliateOpportunity: boolean
+}
+
+export async function getTrendingTopics(): Promise<TrendingTopic[]> {
+  try {
+    const headers = getHeaders()
+    const res = await axios.get("https://api.twitter.com/1.1/trends/place.json", {
+      headers,
+      params: { id: 23424856 }, // Japan WOEID
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (res.data[0]?.trends ?? []).slice(0, 20).map((t: any, i: number) => ({
+      rank: i + 1,
+      topic: t.name,
+      tweetVolume: t.tweet_volume ?? 0,
+      category: "ニュース",
+      affiliateOpportunity: false,
+    }))
+  } catch {
+    return getMockTrendingTopics()
+  }
+}
+
+export function getMockTrendingTopics(): TrendingTopic[] {
+  return [
+    { rank: 1,  topic: "#楽天スーパーSALE",    tweetVolume: 284000, category: "ライフスタイル",   affiliateOpportunity: true  },
+    { rank: 2,  topic: "#母の日",              tweetVolume: 198000, category: "季節イベント",     affiliateOpportunity: true  },
+    { rank: 3,  topic: "ダイソン掃除機",        tweetVolume: 142000, category: "テクノロジー",     affiliateOpportunity: true  },
+    { rank: 4,  topic: "#iPad新型",            tweetVolume: 118000, category: "テクノロジー",     affiliateOpportunity: true  },
+    { rank: 5,  topic: "ふるさと納税",          tweetVolume: 97000,  category: "ライフスタイル",   affiliateOpportunity: true  },
+    { rank: 6,  topic: "#梅雨対策",            tweetVolume: 86000,  category: "季節イベント",     affiliateOpportunity: true  },
+    { rank: 7,  topic: "熱中症対策グッズ",      tweetVolume: 74000,  category: "ライフスタイル",   affiliateOpportunity: true  },
+    { rank: 8,  topic: "#夏コスメ2026",        tweetVolume: 68000,  category: "ファッション",     affiliateOpportunity: true  },
+    { rank: 9,  topic: "ポータブル冷風機",      tweetVolume: 61000,  category: "テクノロジー",     affiliateOpportunity: true  },
+    { rank: 10, topic: "#ワールドカップ予選",   tweetVolume: 54000,  category: "スポーツ",         affiliateOpportunity: false },
+    { rank: 11, topic: "Nintendo Switch 2",    tweetVolume: 48000,  category: "テクノロジー",     affiliateOpportunity: true  },
+    { rank: 12, topic: "#健康診断",            tweetVolume: 43000,  category: "ライフスタイル",   affiliateOpportunity: true  },
+    { rank: 13, topic: "山崎実業 収納",         tweetVolume: 38000,  category: "ライフスタイル",   affiliateOpportunity: true  },
+    { rank: 14, topic: "#読書の習慣",          tweetVolume: 34000,  category: "ライフスタイル",   affiliateOpportunity: false },
+    { rank: 15, topic: "プロテイン おすすめ",   tweetVolume: 31000,  category: "食品・グルメ",     affiliateOpportunity: true  },
+  ]
+}
+
+export interface SeasonalEvent {
+  month: number
+  events: Array<{ name: string; peakWeek: string; categories: string[]; demandLevel: "高" | "中" | "低" }>
+}
+
+export function getSeasonalCalendar(): SeasonalEvent[] {
+  return [
+    { month: 5, events: [
+      { name: "母の日",          peakWeek: "第2週",  categories: ["花・ギフト", "美容・コスメ", "食品"],  demandLevel: "高" },
+      { name: "楽天スーパーSALE", peakWeek: "第3週",  categories: ["全ジャンル"],                          demandLevel: "高" },
+      { name: "梅雨前対策",       peakWeek: "第4週",  categories: ["傘・レインウェア", "除湿グッズ"],       demandLevel: "中" },
+    ]},
+    { month: 6, events: [
+      { name: "父の日",           peakWeek: "第3週",  categories: ["グルメ", "ファッション", "酒"],         demandLevel: "高" },
+      { name: "梅雨対策",         peakWeek: "第1週",  categories: ["傘・カッパ", "除湿機", "防水スプレー"], demandLevel: "中" },
+      { name: "ボーナスシーズン",  peakWeek: "第4週",  categories: ["家電", "旅行", "ファッション"],         demandLevel: "高" },
+    ]},
+    { month: 7, events: [
+      { name: "夏のボーナス",     peakWeek: "第1週",  categories: ["家電", "ゲーム", "旅行"],               demandLevel: "高" },
+      { name: "熱中症対策",       peakWeek: "第2週",  categories: ["冷感グッズ", "扇風機", "飲料"],          demandLevel: "高" },
+      { name: "お中元",          peakWeek: "第3週",  categories: ["食品・グルメ", "飲料"],                  demandLevel: "高" },
+    ]},
+  ]
+}

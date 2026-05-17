@@ -25,6 +25,7 @@ const navLinks = [
   { href: "/weekly-news", label: "週次レポート", icon: "📰" },
   { href: "/price-alerts", label: "値動きアラート", icon: "⚡" },
   { href: "/rakuten-affiliate", label: "楽天アフィリエイト", icon: "🛒" },
+  { href: "/trend-post",        label: "トレンド×投稿",     icon: "📣" },
 ];
 
 export default function RootLayout({

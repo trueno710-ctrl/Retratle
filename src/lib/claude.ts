@@ -4,6 +4,121 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
+export interface AffiliateProductSuggestion {
+  name: string
+  category: string
+  estimatedPrice: string
+  commissionRate: string
+  rakutenSearchQuery: string
+  reason: string
+  expectedRevenue: number
+  urgency: "今すぐ" | "今週中" | "今月中"
+  postAngle: string
+}
+
+export async function suggestAffiliateProductsFromTrend(
+  trendTopic: string,
+  seasonalContext: string
+): Promise<AffiliateProductSuggestion[]> {
+  const message = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 2048,
+    system: "あなたは楽天アフィリエイトで月10万円以上稼ぐ熟練のアフィリエイターです。トレンドと季節から最適な商品を提案してください。",
+    messages: [
+      {
+        role: "user",
+        content: `Xトレンド「${trendTopic}」と季節背景「${seasonalContext}」をもとに、楽天アフィリエイトで今すぐ紹介すべき商品を3件提案してください。
+
+以下のJSON配列形式のみで回答してください:
+[
+  {
+    "name": "商品名",
+    "category": "カテゴリ",
+    "estimatedPrice": "¥XX,XXX",
+    "commissionRate": "X%",
+    "rakutenSearchQuery": "楽天での検索キーワード",
+    "reason": "この商品を今選ぶ理由（80字以内）",
+    "expectedRevenue": 12000,
+    "urgency": "今すぐ|今週中|今月中",
+    "postAngle": "X投稿の訴求角度（40字以内）"
+  }
+]`,
+      },
+    ],
+  })
+
+  const content = message.content[0]
+  if (content.type !== "text") return []
+  try {
+    const m = content.text.trim().match(/\[[\s\S]*\]/)
+    if (!m) return []
+    return JSON.parse(m[0]) as AffiliateProductSuggestion[]
+  } catch {
+    return []
+  }
+}
+
+export interface DraftPost {
+  text: string
+  hashtags: string[]
+  characterCount: number
+  callToAction: string
+  bestPostTime: string
+}
+
+export async function generateAffiliateXPost(
+  productName: string,
+  productPrice: string,
+  trendTopic: string,
+  affiliateUrl: string,
+  postAngle: string
+): Promise<DraftPost> {
+  const message = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 1024,
+    system: "あなたはXで10万フォロワーを持つ楽天アフィリエイターです。クリック率・購買率の高い投稿文を作成します。",
+    messages: [
+      {
+        role: "user",
+        content: `以下の条件でX投稿の下書きを作成してください。
+
+商品名: ${productName}
+価格: ${productPrice}
+関連トレンド: ${trendTopic}
+アフィリエイトURL: ${affiliateUrl}
+訴求角度: ${postAngle}
+
+条件:
+- 140字以内（URLの22字を除く）
+- トレンドに乗った自然な文脈でアフィリエイトリンクを紹介
+- 押しつけがましくなく、読者の役に立つ視点
+- ハッシュタグは2〜3個
+
+以下のJSON形式のみで回答:
+{
+  "text": "投稿本文（URLは[URL]プレースホルダーで）",
+  "hashtags": ["#ハッシュタグ1", "#ハッシュタグ2"],
+  "characterCount": 118,
+  "callToAction": "リンクのテキスト（10字以内）",
+  "bestPostTime": "投稿推奨時間（例: 朝7時・昼12時・夜22時）"
+}`,
+      },
+    ],
+  })
+
+  const content = message.content[0]
+  if (content.type !== "text") {
+    return { text: "", hashtags: [], characterCount: 0, callToAction: "詳しくはこちら", bestPostTime: "朝7時" }
+  }
+  try {
+    const m = content.text.trim().match(/\{[\s\S]*\}/)
+    if (!m) throw new Error()
+    return JSON.parse(m[0]) as DraftPost
+  } catch {
+    return { text: content.text.trim(), hashtags: [], characterCount: content.text.length, callToAction: "詳しくはこちら", bestPostTime: "朝7時" }
+  }
+}
+
 export interface StockRecommendation {
   ticker: string
   name: string
