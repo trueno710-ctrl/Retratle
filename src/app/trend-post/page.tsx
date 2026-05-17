@@ -148,15 +148,25 @@ export default function TrendPostPage() {
     setLoadingDraft(false);
   }, [selectedTrend, affiliateUrl]);
 
+  // 直接投稿せず承認キューへ送信
   const handlePost = useCallback(async () => {
     if (!editedText || !selectedProduct || !selectedTrend) return;
     setLoadingPost(true);
     setPostResult(null);
 
-    const res = await fetch("/api/trend-post", {
+    const res = await fetch("/api/approval", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "post", postText: editedText }),
+      body: JSON.stringify({
+        action: "submit",
+        item: {
+          source: "trend-post",
+          product: selectedProduct.name,
+          trend: selectedTrend.topic,
+          caption: editedText,
+          platforms: ["x", "instagram", "threads"],
+        },
+      }),
     });
 
     if (res.ok) {
@@ -167,8 +177,8 @@ export default function TrendPostPage() {
           text: editedText,
           product: selectedProduct.name,
           trend: selectedTrend.topic,
-          status: "posted",
-          postedAt: new Date().toLocaleString("ja-JP"),
+          status: "scheduled",
+          scheduledAt: "承認キュー確認中",
         },
         ...prev,
       ]);
@@ -180,24 +190,8 @@ export default function TrendPostPage() {
     setLoadingPost(false);
   }, [editedText, selectedProduct, selectedTrend]);
 
-  const handleSchedule = useCallback(() => {
-    if (!editedText || !selectedProduct || !selectedTrend) return;
-    const scheduledAt = "2026/05/20 07:00";
-    setPostHistory((prev) => [
-      {
-        id: Date.now().toString(),
-        text: editedText,
-        product: selectedProduct.name,
-        trend: selectedTrend.topic,
-        status: "scheduled",
-        scheduledAt,
-      },
-      ...prev,
-    ]);
-    setEditedText("");
-    setDraft(null);
-    setPostResult("success");
-  }, [editedText, selectedProduct, selectedTrend]);
+  // 承認キューへ送信（handlePostと同じ動作）
+  const handleSchedule = handlePost;
 
   const charCount = editedText.length;
 
@@ -452,34 +446,30 @@ export default function TrendPostPage() {
               </div>
 
               {postResult === "success" && (
-                <div className="text-sm text-center py-2 rounded-lg" style={{ background: "rgba(16,185,129,0.15)", color: "#10b981" }}>
-                  ✅ 投稿しました！
+                <div className="space-y-1.5">
+                  <div className="text-sm text-center py-2 rounded-lg" style={{ background: "rgba(16,185,129,0.15)", color: "#10b981" }}>
+                    ✅ 承認キューに送りました！
+                  </div>
+                  <a href="/approval" className="block text-center text-xs py-1.5 rounded-lg"
+                    style={{ background: "#1f2937", color: "#60a5fa" }}>
+                    ✅ 編集・承認部で確認する →
+                  </a>
                 </div>
               )}
               {postResult === "error" && (
                 <div className="text-sm text-center py-2 rounded-lg" style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444" }}>
-                  ❌ 投稿に失敗しました（X API設定を確認）
+                  ❌ 送信失敗
                 </div>
               )}
 
-              <div className="flex gap-2">
-                <button
-                  onClick={handleSchedule}
-                  disabled={!editedText || loadingPost}
-                  className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-40"
-                  style={{ background: "#1f2937", color: "#d1d5db", border: "1px solid #374151" }}
-                >
-                  📅 予約投稿
-                </button>
-                <button
-                  onClick={handlePost}
-                  disabled={!editedText || loadingPost || charCount > 280}
-                  className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-40"
-                  style={{ background: "#1d4ed8", color: "white" }}
-                >
-                  {loadingPost ? "投稿中..." : "𝕏 今すぐ投稿"}
-                </button>
-              </div>
+              <button
+                onClick={handlePost}
+                disabled={!editedText || loadingPost}
+                className="w-full py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-40"
+                style={{ background: "linear-gradient(135deg,#1d4ed8,#7c3aed)", color: "white" }}
+              >
+                {loadingPost ? "送信中..." : "📋 承認キューに送る（Instagram / Threads / X）"}
+              </button>
             </div>
           </div>
 

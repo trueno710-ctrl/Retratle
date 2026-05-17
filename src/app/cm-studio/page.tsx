@@ -146,13 +146,25 @@ export default function CMStudioPage() {
     }
   }
 
+  // 直接投稿せず承認キューに送る
   async function handlePost() {
     setLoadingPost(true);
     setPostResult(null);
-    const res = await fetch("/api/cm-studio", {
+    const res = await fetch("/api/approval", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "post", postText: postCaption }),
+      body: JSON.stringify({
+        action: "submit",
+        item: {
+          source: "cm-studio",
+          product: productName,
+          trend: trendContext,
+          caption: postCaption,
+          imageUrl: imageUrl || undefined,
+          videoUrl: videoJob?.videoUrl || undefined,
+          platforms: ["instagram", "threads", "x"],
+        },
+      }),
     });
     setPostResult(res.ok ? "success" : "error");
     setLoadingPost(false);
@@ -164,7 +176,7 @@ export default function CMStudioPage() {
     { id: "concept", label: "CMコンセプト", icon: "2" },
     { id: "image",   label: "AI画像生成", icon: "3" },
     { id: "video",   label: "AI動画生成", icon: "4" },
-    { id: "post",    label: "X投稿",      icon: "5" },
+    { id: "post",    label: "承認キューへ",icon: "5" },
   ];
   const stepOrder: Step[] = ["input","concept","image","video","post"];
 
@@ -422,22 +434,29 @@ export default function CMStudioPage() {
               )}
             </div>
             {postResult === "success" && (
-              <div className="mb-3 text-sm text-center py-2 rounded-lg"
-                style={{ background: "rgba(16,185,129,0.15)", color: "#10b981" }}>
-                ✅ X に投稿しました！
+              <div className="mb-3 space-y-2">
+                <div className="text-sm text-center py-2 rounded-lg"
+                  style={{ background: "rgba(16,185,129,0.15)", color: "#10b981" }}>
+                  ✅ 承認キューに送りました！
+                </div>
+                <a href="/approval"
+                  className="block text-center text-xs py-1.5 rounded-lg transition-colors"
+                  style={{ background: "#1f2937", color: "#60a5fa" }}>
+                  ✅ 編集・承認部で確認する →
+                </a>
               </div>
             )}
             {postResult === "error" && (
               <div className="mb-3 text-sm text-center py-2 rounded-lg"
                 style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444" }}>
-                ❌ 投稿失敗（X API設定を確認）
+                ❌ 送信失敗
               </div>
             )}
             <button onClick={handlePost}
-              disabled={!postCaption || loadingPost || postCaption.length > 280}
+              disabled={!postCaption || loadingPost}
               className="w-full py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-40"
-              style={{ background: "#1d4ed8", color: "white" }}>
-              {loadingPost ? "投稿中..." : "𝕏 画像・動画つきで投稿する"}
+              style={{ background: "linear-gradient(135deg,#1d4ed8,#7c3aed)", color: "white" }}>
+              {loadingPost ? "送信中..." : "📋 承認キューに送る（Instagram / Threads / X）"}
             </button>
           </div>
         </div>

@@ -203,6 +203,139 @@ ${categoryBreakdown.map(c => `${c.category}: ${c.share}% (成長率${c.growth})`
   }
 }
 
+export interface ComplianceReport {
+  passed: boolean
+  complianceScore: number
+  prDisclosure: { present: boolean; suggested: string }
+  issues: Array<{
+    severity: "error" | "warning" | "info"
+    law: string
+    description: string
+    suggestion: string
+  }>
+  revisedCaption: string
+}
+
+export async function checkPostCompliance(
+  caption: string,
+  productName: string,
+  platforms: string[]
+): Promise<ComplianceReport | null> {
+  const message = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 1536,
+    system: `あなたは日本のアフィリエイト・SNS投稿のコンプライアンス専門家です。
+以下の法律・規約を熟知しています:
+- 景品表示法（不当表示の禁止）
+- 特定商取引法（通信販売の広告規制）
+- 消費者契約法
+- ASP（楽天アフィリエイト）の規約
+- 各SNS（Instagram・Threads・X）のガイドライン
+- ステルスマーケティング規制（2023年10月施行）`,
+    messages: [
+      {
+        role: "user",
+        content: `以下のアフィリエイト投稿文を法令・規約の観点でチェックしてください。
+
+【商品名】${productName}
+【投稿予定プラットフォーム】${platforms.join("、")}
+【投稿文】
+${caption}
+
+以下のJSON形式のみで回答してください（コメント不要）:
+{
+  "passed": true,
+  "complianceScore": 85,
+  "prDisclosure": {
+    "present": false,
+    "suggested": "#PR または「広告：」の追記が必要"
+  },
+  "issues": [
+    {
+      "severity": "error|warning|info",
+      "law": "景品表示法|特定商取引法|ステマ規制|SNSガイドライン|アフィリエイト規約",
+      "description": "問題の具体的な説明（50字以内）",
+      "suggestion": "修正方法の提案（80字以内）"
+    }
+  ],
+  "revisedCaption": "コンプライアンスに準拠した修正版の投稿文（元の文章をベースに最小限の修正）"
+}
+
+判定基準:
+- errorが1件以上: passed=false, score大幅減点
+- warningのみ: passed=true, score若干減点
+- infoのみ: passed=true, score満点近く
+- PR表記なし: 2023年10月のステマ規制により必ずerrorとすること`,
+      },
+    ],
+  })
+
+  const content = message.content[0]
+  if (content.type !== "text") return null
+  try {
+    const m = content.text.trim().match(/\{[\s\S]*\}/)
+    if (!m) return null
+    return JSON.parse(m[0]) as ComplianceReport
+  } catch {
+    return null
+  }
+}
+
+export interface PostingSchedule {
+  frequency: string
+  nextSlots: Array<{ time: string; platforms: string[]; reasoning: string }>
+  weeklyPlan: string
+  reasoning: string
+}
+
+export async function generatePostingSchedule(
+  salesData: Array<{ label: string; revenue: number }>,
+  recentPosts: Array<{ postedAt: string; platform: string; product: string }>,
+  currentMonth: number
+): Promise<PostingSchedule | null> {
+  const message = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 1024,
+    system: "あなたはSNSマーケティングと楽天アフィリエイトの専門家です。データに基づいた最適な投稿戦略を立案します。",
+    messages: [
+      {
+        role: "user",
+        content: `以下のデータをもとに、Instagram・Threads・Xへの最適な投稿スケジュールを提案してください。
+
+【売上推移（直近）】
+${salesData.slice(-4).map(d => `${d.label}: ¥${d.revenue.toLocaleString()}`).join("\n")}
+
+【最近の投稿履歴】
+${recentPosts.slice(-5).map(p => `${p.postedAt} ${p.platform} - ${p.product}`).join("\n") || "なし"}
+
+【現在月】${currentMonth}月（${currentMonth === 5 ? "母の日・楽天スーパーSALE期" : currentMonth === 6 ? "父の日・ボーナス期" : "通常期"}）
+
+以下のJSON形式のみで回答してください:
+{
+  "frequency": "例: 1日2〜3投稿",
+  "nextSlots": [
+    { "time": "2026/05/17 07:00", "platforms": ["x","threads"], "reasoning": "理由（40字以内）" },
+    { "time": "2026/05/17 12:00", "platforms": ["instagram"], "reasoning": "理由（40字以内）" },
+    { "time": "2026/05/17 22:00", "platforms": ["threads","instagram"], "reasoning": "理由（40字以内）" }
+  ],
+  "weeklyPlan": "週間投稿計画の説明（100字以内）",
+  "reasoning": "このスケジュールを選んだ根拠（100字以内）"
+}`,
+      },
+    ],
+  })
+
+  const content = message.content[0]
+  if (content.type !== "text") return null
+  try {
+    const m = content.text.trim().match(/\{[\s\S]*\}/)
+    if (!m) return null
+    return JSON.parse(m[0]) as PostingSchedule
+  } catch {
+    return null
+  }
+}
+
 export async function generateAffiliateXPost(
   productName: string,
   productPrice: string,

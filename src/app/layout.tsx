@@ -18,16 +18,28 @@ export const metadata: Metadata = {
   description: "AIを活用した日本株式市場分析・省庁モニタリングプラットフォーム",
 };
 
-const navLinks = [
-  { href: "/", label: "ダッシュボード", icon: "⬡" },
-  { href: "/ministry-monitor", label: "省庁モニター", icon: "🏛" },
-  { href: "/tenbagger", label: "テンバガー研究所", icon: "🚀" },
-  { href: "/weekly-news", label: "週次レポート", icon: "📰" },
-  { href: "/price-alerts", label: "値動きアラート", icon: "⚡" },
-  { href: "/rakuten-affiliate", label: "楽天アフィリエイト", icon: "🛒" },
-  { href: "/trend-post",        label: "トレンド×投稿",     icon: "📣" },
-  { href: "/cm-studio",         label: "CMスタジオ",        icon: "🎬" },
-  { href: "/analytics",         label: "売上分析",          icon: "📊" },
+const navSections = [
+  {
+    label: "株式分析",
+    links: [
+      { href: "/",                label: "ダッシュボード",   icon: "⬡" },
+      { href: "/ministry-monitor",label: "省庁モニター",     icon: "🏛" },
+      { href: "/tenbagger",       label: "テンバガー研究所", icon: "🚀" },
+      { href: "/weekly-news",     label: "週次レポート",     icon: "📰" },
+      { href: "/price-alerts",    label: "値動きアラート",   icon: "⚡" },
+    ],
+  },
+  {
+    label: "アフィリエイト事業部",
+    links: [
+      { href: "/company",          label: "🏢 会社HQ",           icon: "🏢" },
+      { href: "/rakuten-affiliate",label: "収益ダッシュボード",   icon: "🛒" },
+      { href: "/trend-post",       label: "📣 マーケティング部",  icon: "📣" },
+      { href: "/cm-studio",        label: "🎬 クリエイティブ部",  icon: "🎬" },
+      { href: "/approval",         label: "✅ 編集・承認部",      icon: "✅" },
+      { href: "/analytics",        label: "📊 分析部",            icon: "📊" },
+    ],
+  },
 ];
 
 export default function RootLayout({
@@ -77,17 +89,24 @@ export default function RootLayout({
           </div>
 
           {/* Nav */}
-          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all group"
-                style={{ color: "#9ca3af" }}
-              >
-                <span className="text-base w-5 text-center">{link.icon}</span>
-                <span className="group-hover:text-white transition-colors">{link.label}</span>
-              </Link>
+          <nav className="flex-1 p-3 overflow-y-auto space-y-4">
+            {navSections.map((section) => (
+              <div key={section.label}>
+                <p className="text-xs font-semibold px-3 mb-1" style={{ color: "#4b5563" }}>
+                  {section.label}
+                </p>
+                {section.links.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all group"
+                    style={{ color: "#9ca3af" }}
+                  >
+                    <span className="text-base w-5 text-center">{link.icon}</span>
+                    <span className="group-hover:text-white transition-colors">{link.label}</span>
+                  </Link>
+                ))}
+              </div>
             ))}
           </nav>
 
