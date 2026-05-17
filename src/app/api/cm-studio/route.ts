@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     if (!body.imagePrompt) return NextResponse.json({ error: "imagePrompt required" }, { status: 400 })
     const result = await generateAdImage(body.imagePrompt)
     if (!result) {
-      // FAL_KEY 未設定時はプレースホルダーを返す
+      // GOOGLE_API_KEY 未設定時はプレースホルダーを返す
       return NextResponse.json({
         image: {
           url: `https://placehold.co/1024x1024/1a1a2e/3b82f6?text=${encodeURIComponent(body.imagePrompt.slice(0, 30))}`,

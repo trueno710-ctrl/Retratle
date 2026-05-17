@@ -254,8 +254,8 @@ export default function CompanyPage() {
         <h2 className="text-sm font-semibold text-white mb-4">🔑 APIキー設定状況</h2>
         <div className="grid grid-cols-3 gap-3">
           {[
-            { name: "Anthropic API",    env: "ANTHROPIC_API_KEY",        required: true,  dept: "全部署（AI生成・分析）" },
-            { name: "fal.ai",           env: "FAL_KEY",                  required: true,  dept: "クリエイティブ部（画像＋動画）" },
+            { name: "Anthropic API",    env: "ANTHROPIC_API_KEY",        required: true,  dept: "全部署（AI文章生成・分析）" },
+            { name: "Google AI",        env: "GOOGLE_API_KEY",           required: true,  dept: "クリエイティブ部（Imagen 3 画像 + Veo 2 動画）" },
             { name: "X (Twitter) API",  env: "X_BEARER_TOKEN",           required: true,  dept: "投稿管理部" },
             { name: "Instagram API",    env: "INSTAGRAM_ACCESS_TOKEN",   required: true,  dept: "投稿管理部" },
             { name: "Threads API",      env: "THREADS_ACCESS_TOKEN",     required: true,  dept: "投稿管理部" },

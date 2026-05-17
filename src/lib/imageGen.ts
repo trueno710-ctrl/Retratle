@@ -1,72 +1,82 @@
 /**
- * fal.ai を使った画像・動画生成（1つの FAL_KEY で完結）
- * https://fal.ai/docs
+ * Google AI（Gemini API）を使った画像・動画生成
+ * 1つの GOOGLE_API_KEY で完結
  *
- * 必要な環境変数:
- *   FAL_KEY  - fal.ai のAPIキー（https://fal.ai/dashboard/keys）
+ * 画像: Imagen 3 (imagen-3.0-generate-001)
+ * 動画: Veo 2  (veo-2.0-generate-001)
  *
- * 画像: FLUX.1 Pro（DALL-E 3同等品質）
- * 動画: Kling v1.6（Runway ML同等品質）
+ * APIキー取得: https://aistudio.google.com/apikey
  */
 
-const FAL_BASE = "https://fal.run"
-const FAL_QUEUE = "https://queue.fal.run"
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
-function getKey() {
-  return process.env.FAL_KEY ?? null
-}
-
-function falHeaders(key: string) {
-  return {
-    Authorization: `Key ${key}`,
-    "Content-Type": "application/json",
-  }
+function getKey(): string | null {
+  return process.env.GOOGLE_API_KEY ?? null
 }
 
 export interface GeneratedImage {
-  url: string
+  url: string          // data:image/png;base64,... または公開URL
   revisedPrompt?: string
 }
 
 export interface VideoJob {
-  jobId: string
+  jobId: string        // Google Long-Running Operation の name
   status: "queued" | "processing" | "completed" | "failed"
-  videoUrl?: string
+  videoUrl?: string    // data:video/mp4;base64,...
   thumbnailUrl?: string
 }
 
+// ---------- 画像生成 ----------
+
 /**
- * FLUX.1 Pro で広告画像を生成。
- * 同期APIなので結果が直接返ってくる。
+ * Imagen 3 で広告画像を生成。
+ * レスポンスは base64 → data URL に変換して返す。
  */
 export async function generateAdImage(prompt: string): Promise<GeneratedImage | null> {
   const key = getKey()
   if (!key) return null
 
   try {
-    const res = await fetch(`${FAL_BASE}/fal-ai/flux-pro`, {
-      method: "POST",
-      headers: falHeaders(key),
-      body: JSON.stringify({
-        prompt,
-        image_size: "square_hd",   // 1024×1024
-        num_images: 1,
-        enable_safety_checker: true,
-      }),
-    })
-    if (!res.ok) return null
-    const data = await res.json() as { images: Array<{ url: string }> }
-    const url = data.images?.[0]?.url
-    if (!url) return null
-    return { url, revisedPrompt: prompt }
-  } catch {
+    const res = await fetch(
+      `${GEMINI_BASE}/models/imagen-3.0-generate-001:predict?key=${key}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instances: [{ prompt }],
+          parameters: {
+            sampleCount: 1,
+            aspectRatio: "1:1",
+            safetyFilterLevel: "BLOCK_SOME",
+            personGeneration: "ALLOW_ADULT",
+          },
+        }),
+      }
+    )
+    if (!res.ok) {
+      const err = await res.text()
+      console.error("Imagen error:", err)
+      return null
+    }
+    const data = await res.json() as {
+      predictions: Array<{ bytesBase64Encoded: string; mimeType: string }>
+    }
+    const pred = data.predictions?.[0]
+    if (!pred?.bytesBase64Encoded) return null
+
+    const dataUrl = `data:${pred.mimeType ?? "image/png"};base64,${pred.bytesBase64Encoded}`
+    return { url: dataUrl, revisedPrompt: prompt }
+  } catch (e) {
+    console.error("generateAdImage:", e)
     return null
   }
 }
 
+// ---------- 動画生成 ----------
+
 /**
- * Kling v1.6 で画像→動画を生成（キューベース）。
- * → jobId を返し、checkVideoStatus でポーリングする。
+ * Veo 2 で画像→動画を生成（非同期 LRO）。
+ * imageUrl は data URL または公開 URL を受け付ける。
  */
 export async function startVideoGeneration(
   imageUrl: string,
@@ -76,57 +86,87 @@ export async function startVideoGeneration(
   if (!key) return null
 
   try {
+    // data URL → base64 部分を抽出、または URL から fetch して変換
+    let imageBase64: string
+    let imageMime = "image/png"
+
+    if (imageUrl.startsWith("data:")) {
+      const [header, b64] = imageUrl.split(",")
+      imageMime = header.split(":")[1]?.split(";")[0] ?? "image/png"
+      imageBase64 = b64
+    } else {
+      const imgRes = await fetch(imageUrl)
+      const buf = await imgRes.arrayBuffer()
+      imageBase64 = Buffer.from(buf).toString("base64")
+      imageMime = imgRes.headers.get("content-type") ?? "image/png"
+    }
+
     const res = await fetch(
-      `${FAL_QUEUE}/fal-ai/kling-video/v1.6/standard/image-to-video`,
+      `${GEMINI_BASE}/models/veo-2.0-generate-001:predictLongRunning?key=${key}`,
       {
         method: "POST",
-        headers: falHeaders(key),
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          image_url: imageUrl,
-          prompt: motionPrompt,
-          duration: "5",       // 5秒
-          aspect_ratio: "16:9",
+          instances: [
+            {
+              prompt: motionPrompt,
+              image: { bytesBase64Encoded: imageBase64, mimeType: imageMime },
+            },
+          ],
+          parameters: {
+            aspectRatio: "16:9",
+            durationSeconds: 5,
+            sampleCount: 1,
+          },
         }),
       }
     )
-    if (!res.ok) return null
-    const data = await res.json() as { request_id: string }
-    if (!data.request_id) return null
-    return { jobId: data.request_id, status: "queued" }
-  } catch {
+    if (!res.ok) {
+      const err = await res.text()
+      console.error("Veo start error:", err)
+      return null
+    }
+    const data = await res.json() as { name: string }
+    if (!data.name) return null
+    return { jobId: data.name, status: "queued" }
+  } catch (e) {
+    console.error("startVideoGeneration:", e)
     return null
   }
 }
 
-/** Kling のジョブステータスをポーリング */
+/**
+ * Veo のジョブステータスをポーリング。
+ * 完了時は base64 → data URL に変換して返す。
+ */
 export async function checkVideoStatus(jobId: string): Promise<VideoJob | null> {
   const key = getKey()
   if (!key) return null
 
   try {
-    // まずステータス確認
-    const statusRes = await fetch(
-      `${FAL_QUEUE}/fal-ai/kling-video/v1.6/standard/image-to-video/requests/${jobId}/status`,
-      { headers: falHeaders(key) }
-    )
-    if (!statusRes.ok) return null
-    const status = await statusRes.json() as { status: string }
+    const res = await fetch(`${GEMINI_BASE}/${jobId}?key=${key}`)
+    if (!res.ok) return null
 
-    if (status.status === "COMPLETED") {
-      // 結果を取得
-      const resultRes = await fetch(
-        `${FAL_QUEUE}/fal-ai/kling-video/v1.6/standard/image-to-video/requests/${jobId}`,
-        { headers: falHeaders(key) }
-      )
-      if (!resultRes.ok) return { jobId, status: "completed" }
-      const result = await resultRes.json() as { video?: { url: string } }
-      return { jobId, status: "completed", videoUrl: result.video?.url }
+    const data = await res.json() as {
+      done?: boolean
+      error?: { message: string }
+      response?: {
+        videos: Array<{ bytesBase64Encoded: string; mimeType: string }>
+      }
     }
 
-    if (status.status === "FAILED") return { jobId, status: "failed" }
-    if (status.status === "IN_PROGRESS") return { jobId, status: "processing" }
-    return { jobId, status: "queued" }
-  } catch {
+    if (data.error) return { jobId, status: "failed" }
+
+    if (data.done && data.response?.videos?.length) {
+      const vid = data.response.videos[0]
+      const videoUrl = `data:${vid.mimeType ?? "video/mp4"};base64,${vid.bytesBase64Encoded}`
+      return { jobId, status: "completed", videoUrl }
+    }
+
+    if (data.done) return { jobId, status: "failed" }
+    return { jobId, status: "processing" }
+  } catch (e) {
+    console.error("checkVideoStatus:", e)
     return null
   }
 }
