@@ -29,6 +29,37 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## Obsidian MCP 連携セットアップ
+
+Claude Code から Obsidian を MCP 経由で読み書きするための設定です。
+
+### 必要な準備（ローカルPC側）
+
+1. **Obsidian に "Local REST API" プラグインをインストール**
+   - Obsidian → 設定 → コミュニティプラグイン → 検索: `Local REST API`
+   - インストール後、有効化する
+   - プラグイン設定から API Key をコピーしておく（ポートは `27123`）
+
+2. **環境変数を設定**
+   ```bash
+   export OBSIDIAN_API_KEY="ここにAPIキーを貼り付ける"
+   ```
+   または `.env.local` に追記：
+   ```
+   OBSIDIAN_API_KEY=ここにAPIキーを貼り付ける
+   ```
+
+3. **Claude Code を再起動**（または `/mcp` コマンドで確認）
+
+### 利用可能な操作
+
+設定完了後、Claude Code セッション内で以下が可能になります：
+- Vault 内のノートの検索・読み込み
+- 新規ノートの作成・既存ノートの更新
+- デイリーノートへの書き込み
+
+---
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
