@@ -1,88 +1,88 @@
-# Obsidian + Claude Code セットアップスクリプト
-# PowerShellで実行: .\setup-obsidian-claude.ps1
+# Obsidian + Claude Code Setup Script
+# Run in PowerShell: .\setup-obsidian-claude.ps1
 
 $workDir = "$env:USERPROFILE\obsidian-claude"
 
-Write-Host "=== Obsidian + Claude Code セットアップ ===" -ForegroundColor Cyan
+Write-Host "=== Obsidian + Claude Code Setup ===" -ForegroundColor Cyan
 
-# 1. 作業フォルダ作成
-Write-Host "`n[1/4] 作業フォルダを作成中..." -ForegroundColor Yellow
+# 1. Create working directory
+Write-Host "`n[1/4] Creating working directory..." -ForegroundColor Yellow
 New-Item -ItemType Directory -Force -Path $workDir | Out-Null
 New-Item -ItemType Directory -Force -Path "$workDir\.claude" | Out-Null
 Write-Host "    -> $workDir" -ForegroundColor Green
 
-# 2. OBSIDIAN_API_KEY の確認
-Write-Host "`n[2/4] APIキーを確認中..." -ForegroundColor Yellow
+# 2. Check OBSIDIAN_API_KEY
+Write-Host "`n[2/4] Checking API key..." -ForegroundColor Yellow
 $apiKey = [System.Environment]::GetEnvironmentVariable("OBSIDIAN_API_KEY", "User")
 if (-not $apiKey) {
-    Write-Host "    [エラー] OBSIDIAN_API_KEY が設定されていません" -ForegroundColor Red
-    Write-Host "    以下を実行してから再度このスクリプトを実行してください:"
-    Write-Host '    [System.Environment]::SetEnvironmentVariable("OBSIDIAN_API_KEY", "あなたのAPIキー", "User")'
+    Write-Host "    [ERROR] OBSIDIAN_API_KEY is not set." -ForegroundColor Red
+    Write-Host "    Please run the following first:"
+    Write-Host '    [System.Environment]::SetEnvironmentVariable("OBSIDIAN_API_KEY", "your-key", "User")'
     exit 1
 }
-Write-Host "    -> APIキー確認OK" -ForegroundColor Green
+Write-Host "    -> API key OK" -ForegroundColor Green
 
-# 3. .claude/settings.json を作成
-Write-Host "`n[3/4] MCP設定ファイルを作成中..." -ForegroundColor Yellow
-$settings = @{
-    mcpServers = @{
-        obsidian = @{
-            command = "npx"
-            args    = @("-y", "mcp-obsidian")
-            env     = @{
-                OBSIDIAN_API_KEY = $apiKey
-                OBSIDIAN_HOST    = "http://localhost:27123"
-            }
-        }
+# 3. Create .claude/settings.json
+Write-Host "`n[3/4] Creating MCP settings..." -ForegroundColor Yellow
+$settings = @"
+{
+  "mcpServers": {
+    "obsidian": {
+      "command": "npx",
+      "args": ["-y", "mcp-obsidian"],
+      "env": {
+        "OBSIDIAN_API_KEY": "$apiKey",
+        "OBSIDIAN_HOST": "http://localhost:27123"
+      }
     }
-} | ConvertTo-Json -Depth 5
-
-$settings | Out-File -FilePath "$workDir\.claude\settings.json" -Encoding utf8
-Write-Host "    -> .claude\settings.json 作成完了" -ForegroundColor Green
-
-# 4. CLAUDE.md を作成
-Write-Host "`n[4/4] CLAUDE.md を作成中..." -ForegroundColor Yellow
-$claudeMd = @"
-# Obsidian記法ルール
-
-ノートを作成・編集するときは必ず以下のルールに従うこと。
-
-## 内部リンク
-- 通常リンク: [[ノート名]]
-- 別名付き:   [[ノート名|表示テキスト]]
-- 埋め込み:   ![[ノート名]]
-
-## タグ
-- インライン: #タグ名
-- フロントマターに配列で記載
-
-## フロントマター（全ノートの先頭に必ず付ける）
----
-title: タイトル
-date: YYYY-MM-DD
-tags: [タグ1, タグ2]
----
-
-## ファイル命名規則
-- デイリーノート: YYYY-MM-DD.md
-- 通常ノート: 日本語OK、スペースはハイフンで代替
-
-## フォルダ構成
-- デイリーノート: Daily/
-- 株式メモ:       Stocks/
-- アイデア:       Ideas/
+  }
+}
 "@
+[System.IO.File]::WriteAllText("$workDir\.claude\settings.json", $settings, [System.Text.Encoding]::UTF8)
+Write-Host "    -> .claude\settings.json created" -ForegroundColor Green
 
-$claudeMd | Out-File -FilePath "$workDir\CLAUDE.md" -Encoding utf8
-Write-Host "    -> CLAUDE.md 作成完了" -ForegroundColor Green
+# 4. Create CLAUDE.md (Obsidian notation rules)
+Write-Host "`n[4/4] Creating CLAUDE.md..." -ForegroundColor Yellow
+$claudeMd = @"
+# Obsidian Notation Rules
 
-# 完了メッセージ
-Write-Host "`n=== セットアップ完了 ===" -ForegroundColor Cyan
+Always follow these rules when creating or editing notes.
+
+## Internal Links
+- Normal link  : [[Note Name]]
+- With alias   : [[Note Name|Display Text]]
+- Embed        : ![[Note Name]]
+
+## Tags
+- Inline : #tagname
+- Or in frontmatter as array
+
+## Frontmatter (add to every note)
+---
+title: Title
+date: YYYY-MM-DD
+tags: [tag1, tag2]
+---
+
+## File Naming
+- Daily notes : YYYY-MM-DD.md
+- Other notes : descriptive-name.md
+
+## Folder Structure
+- Daily notes : Daily/
+- Stock notes : Stocks/
+- Ideas       : Ideas/
+"@
+[System.IO.File]::WriteAllText("$workDir\CLAUDE.md", $claudeMd, [System.Text.Encoding]::UTF8)
+Write-Host "    -> CLAUDE.md created" -ForegroundColor Green
+
+# Done
+Write-Host "`n=== Setup Complete ===" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "次のステップ:" -ForegroundColor White
-Write-Host "  1. Obsidianを起動する（必須）"
-Write-Host "  2. 以下のコマンドでClaudeを起動:"
+Write-Host "Next steps:"
+Write-Host "  1. Open Obsidian (must be running)"
+Write-Host "  2. Start Claude Code:"
 Write-Host "     cd $workDir" -ForegroundColor Yellow
 Write-Host "     claude" -ForegroundColor Yellow
-Write-Host "  3. Claudeの中で /mcp と入力して obsidian が connected か確認"
+Write-Host "  3. Type /mcp inside Claude and confirm obsidian shows 'connected'"
 Write-Host ""
