@@ -129,13 +129,53 @@ Obsidianを読み書きしたら必ず明示的に伝える:
 
 ---
 
+## 8. 自動登録ルール（常時適用）
+
+会話中に以下が発生したら、ユーザーに確認せず**その場で自動的に**記録する：
+
+**決定事項 → Decisions/ に保存**
+- 「〜にした」「〜で行く」「〜に決めた」という発言
+- 複数の選択肢から1つを選んだ瞬間
+
+**ミス・訂正 → Knowledge/mistakes.md に追記**
+- ユーザーから「違う」「そうじゃない」と訂正された内容
+- 繰り返し起こりうるパターンのみ
+
+**新しい発見・設定完了 → Knowledge/ に保存**
+- ツール・サービスの設定が完了した
+- 問題が解決した
+
+**ユーザー情報の更新 → このCLAUDE.mdのユーザー情報セクションを更新**
+- 新しい好み・プロジェクト・ツールが判明した
+- 重要な決定が確定した
+
+記録後は必ず「📝 〜を記録しました」と一言報告する。
+
+---
+
 ## ユーザー情報
 
 - 名前: 小澤貴
 - 使用カレンダー: Google Calendar（Outlookへ移行予定）
 - 主な関心: 株式投資・テンバガー候補・省庁情報・AI活用
-- 使用ツール: Obsidian, Claude Code, Next.js(Retratle)
+- 使用ツール: Obsidian, Claude Code, Next.js(Retratle), Zapier, Notion
 - OS: Windows 11
+- GitHubリポジトリ: trueno710-ctrl/Retratle
+
+### YouTube チャンネル
+- 開設予定あり
+- チャンネル名候補: **AKATOSHI**（最有力）、RedToshi、AkazawaToshi
+- 名前の由来: OZAWATAKASHI のアナグラム
+
+### 好きなアナグラム（OZAWATAKASHI より）
+- **AKAZAWATOSHI**（赤澤俊 — 剣客風）
+- **HAKITOZAWASA**（葉木沢佐 — 林業の親方風）
+
+### 設定済みの自動化
+- **Amazon荷物 → Googleカレンダー自動登録**: Zapierスキル作成済み（zapier.com でZap作成が必要）
+- **Obsidian MCP連携**: ローカルClaude Codeから接続設定済み
+- **Vault パス**: `C:\Users\truen\OneDrive\デスクトップ`
+- **作業フォルダ**: `C:\Users\truen\obsidian-claude`
 
 ---
 
