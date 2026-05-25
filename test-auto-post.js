@@ -2,13 +2,20 @@
 /**
  * 楽天アフィリエイト 全自動テスト投稿スクリプト
  * 実行方法: node test-auto-post.js
+ *
+ * 流れ:
+ *   1. 楽天で商品検索
+ *   2. Claude AIが最適商品を選定
+ *   3. 投稿文（キャプション）を生成
+ *   4. 内容をすべて表示して確認を求める
+ *   5. y を入力したときのみ Instagram に投稿
  */
 
 const https = require("https")
 const http = require("http")
+const readline = require("readline")
 
 // ===== 設定 =====
-// .env.local から読み込む
 require("fs").readFileSync(".env.local", "utf8").split("\n").forEach(line => {
   const [key, ...val] = line.split("=")
   if (key && val.length) process.env[key.trim()] = val.join("=").trim()
@@ -23,16 +30,24 @@ const CONFIG = {
   siteUrl: "http://localhost:3000",
 }
 
+// キーボード入力（y/n）を待つ
+function askConfirm(question) {
+  return new Promise(resolve => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+    rl.question(question, answer => {
+      rl.close()
+      resolve(answer.trim().toLowerCase())
+    })
+  })
+}
+
 function fetchJson(url, options = {}) {
   return new Promise((resolve, reject) => {
     const urlObj = new URL(url)
     const lib = urlObj.protocol === "https:" ? https : http
     const req = lib.request(url, {
       method: options.method || "GET",
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
+      headers: { "Content-Type": "application/json", ...options.headers },
     }, (res) => {
       let data = ""
       res.on("data", chunk => data += chunk)
@@ -101,8 +116,6 @@ ${itemList}
   const text = res.content[0].text.trim()
   const num = parseInt(text.match(/\d+/)?.[0] || "1") - 1
   const selected = items[Math.min(num, items.length - 1)]
-  console.log(`✅ 選定商品: ${selected.itemName.slice(0, 50)}`)
-  console.log(`   価格: ¥${selected.itemPrice.toLocaleString()} | ★${selected.reviewAverage}(${selected.reviewCount}件)`)
   return selected
 }
 
@@ -139,33 +152,13 @@ URL: ${item.affiliateUrl}
       }],
     }),
   })
-  const caption = res.content[0].text.trim()
-  console.log("✅ 投稿文生成完了")
-  console.log("--- プレビュー（最初の100文字）---")
-  console.log(caption.slice(0, 100) + "...")
-  return caption
+  return res.content[0].text.trim()
 }
 
-// Step 4: CM画像URLを生成
-function generateCmImageUrl(item) {
-  const params = new URLSearchParams({
-    itemName: item.itemName,
-    price: String(item.itemPrice),
-    imageUrl: item.mediumImageUrls[0]?.imageUrl || "",
-    reviewAverage: String(item.reviewAverage),
-    reviewCount: String(item.reviewCount),
-    shopName: item.shopName,
-    account: "@otoku_ai_life",
-  })
-  return `${CONFIG.siteUrl}/api/rakuten/generate-image?${params}`
-}
-
-// Step 5: Instagramに投稿
+// Step 4: Instagramに投稿
 async function postToInstagram(caption, imageUrl) {
   console.log("\n📤 Instagramに投稿中...")
-  console.log(`   画像URL: ${imageUrl.slice(0, 80)}...`)
 
-  // Step 5a: メディアコンテナ作成
   const createParams = new URLSearchParams({
     caption,
     image_url: imageUrl,
@@ -176,13 +169,11 @@ async function postToInstagram(caption, imageUrl) {
     { method: "POST" }
   )
 
-  if (createRes.error) {
-    throw new Error(`メディア作成エラー: ${JSON.stringify(createRes.error)}`)
-  }
+  if (createRes.error) throw new Error(`メディア作成エラー: ${JSON.stringify(createRes.error)}`)
   console.log(`✅ メディアコンテナ作成: ${createRes.id}`)
 
-  // Step 5b: 公開
-  await new Promise(r => setTimeout(r, 2000)) // 2秒待機
+  await new Promise(r => setTimeout(r, 2000))
+
   const publishParams = new URLSearchParams({
     creation_id: createRes.id,
     access_token: CONFIG.instagramToken,
@@ -192,20 +183,18 @@ async function postToInstagram(caption, imageUrl) {
     { method: "POST" }
   )
 
-  if (publishRes.error) {
-    throw new Error(`公開エラー: ${JSON.stringify(publishRes.error)}`)
-  }
+  if (publishRes.error) throw new Error(`公開エラー: ${JSON.stringify(publishRes.error)}`)
   console.log(`🎉 Instagram投稿完了！ Post ID: ${publishRes.id}`)
   return publishRes.id
 }
 
-// メイン実行
+// ===== メイン =====
 async function main() {
-  console.log("🚀 楽天アフィリエイト全自動投稿テスト開始")
-  console.log("=".repeat(50))
+  console.log("🚀 楽天アフィリエイト 投稿確認モード")
+  console.log("=".repeat(60))
 
   try {
-    // 1. 検索
+    // 1. 楽天検索
     const items = await searchRakuten("アニメ フィギュア 人気")
 
     // 2. AI選定
@@ -214,18 +203,48 @@ async function main() {
     // 3. 投稿文生成
     const caption = await generatePost(selected)
 
-    // 4. CM画像URL
+    // 4. 使用画像（楽天の商品画像をそのまま使用）
     const imageUrl = selected.mediumImageUrls[0]?.imageUrl || ""
-    console.log(`\n🎬 使用画像: ${imageUrl.slice(0, 60)}...`)
 
-    // 5. Instagram投稿
+    // ========== オーナー確認画面 ==========
+    console.log("\n" + "=".repeat(60))
+    console.log("📋 投稿内容プレビュー（オーナー確認）")
+    console.log("=".repeat(60))
+
+    console.log("\n【選定商品】")
+    console.log(`  商品名 : ${selected.itemName}`)
+    console.log(`  価格   : ¥${selected.itemPrice.toLocaleString()}`)
+    console.log(`  評価   : ★${selected.reviewAverage}（${selected.reviewCount}件レビュー）`)
+    console.log(`  ショップ: ${selected.shopName}`)
+    console.log(`  商品URL: ${selected.itemUrl}`)
+    console.log(`  AF URL : ${selected.affiliateUrl}`)
+
+    console.log("\n【使用画像URL】")
+    console.log(`  ${imageUrl}`)
+
+    console.log("\n【Instagram 投稿文（キャプション）全文】")
+    console.log("-".repeat(60))
+    console.log(caption)
+    console.log("-".repeat(60))
+    console.log(`\n  文字数: ${caption.length} 文字`)
+
+    console.log("\n" + "=".repeat(60))
+    const answer = await askConfirm("👆 上記内容でInstagramに投稿しますか？ (y = 投稿する / n = キャンセル): ")
+
+    if (answer !== "y") {
+      console.log("\n⏸  投稿をキャンセルしました。")
+      console.log("   内容を調整したい場合はお知らせください。")
+      return
+    }
+
+    // 5. 投稿実行
     const postId = await postToInstagram(caption, imageUrl)
 
-    console.log("\n" + "=".repeat(50))
+    console.log("\n" + "=".repeat(60))
     console.log("✅ 全工程完了！")
-    console.log(`   投稿商品: ${selected.itemName.slice(0, 40)}`)
+    console.log(`   投稿商品       : ${selected.itemName.slice(0, 40)}`)
     console.log(`   Instagram Post ID: ${postId}`)
-    console.log(`   価格: ¥${selected.itemPrice.toLocaleString()}`)
+    console.log(`   価格           : ¥${selected.itemPrice.toLocaleString()}`)
 
   } catch (err) {
     console.error("\n❌ エラー:", err.message)
