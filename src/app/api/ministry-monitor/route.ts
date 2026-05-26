@@ -177,7 +177,7 @@ export async function GET() {
 
         if (process.env.ANTHROPIC_API_KEY) {
           try {
-            recommendations = await analyzeMinistryPost(post.text, ministry.name, ministry.sector, ministry.policyThemes2026)
+            recommendations = await analyzeMinistryPost(post.text, ministry.name, ministry.sector) as unknown as ShikihoRecommendation[]
           } catch {
             recommendations = getMockRecommendations(ministry.sector, post.text)
           }
