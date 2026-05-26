@@ -1,562 +1,582 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useCallback } from "react"
-import type { RakutenItem } from "@/app/api/rakuten/search/route"
-import type { GeneratedPost } from "@/app/api/rakuten/generate-post/route"
+import { useState } from "react";
 
-type Tab = "search" | "posts" | "settings"
-type Tone = "カジュアル" | "丁寧" | "熱量高め"
+const kpiCards = [
+  {
+    label: "今月の収益",
+    value: "¥127,450",
+    sub: "前月比 +18.3%",
+    positive: true,
+    color: "#10b981",
+    icon: "💰",
+  },
+  {
+    label: "クリック数",
+    value: "48,320",
+    sub: "前月比 +12.1%",
+    positive: true,
+    color: "#3b82f6",
+    icon: "👆",
+  },
+  {
+    label: "コンバージョン率",
+    value: "3.2%",
+    sub: "前月比 +0.4pt",
+    positive: true,
+    color: "#8b5cf6",
+    icon: "🎯",
+  },
+  {
+    label: "アクティブ商品数",
+    value: "84",
+    sub: "新規 +12",
+    positive: true,
+    color: "#f59e0b",
+    icon: "🛍",
+  },
+];
 
-interface SavedPost {
-  id: string
-  createdAt: string
-  item: RakutenItem
-  generated: GeneratedPost
-  cmImageUrl?: string
-  postedInstagram: boolean
-  postedThreads: boolean
-  instagramPostId?: string
-  threadsPostId?: string
-  note?: string
+const monthlyRevenue = [
+  { month: "12月", revenue: 89200 },
+  { month: "1月", revenue: 76400 },
+  { month: "2月", revenue: 94100 },
+  { month: "3月", revenue: 108300 },
+  { month: "4月", revenue: 115600 },
+  { month: "5月", revenue: 127450 },
+];
+
+const topProducts = [
+  {
+    id: 1,
+    name: "Anker PowerCore 10000",
+    category: "家電・PC",
+    clicks: 4820,
+    conversions: 187,
+    cvr: 3.9,
+    revenue: 18700,
+    commission: 3.0,
+    trend: "+8.2%",
+    positive: true,
+  },
+  {
+    id: 2,
+    name: "ニトリ 低反発枕",
+    category: "インテリア",
+    clicks: 3940,
+    conversions: 168,
+    cvr: 4.3,
+    revenue: 14280,
+    commission: 2.5,
+    trend: "+5.1%",
+    positive: true,
+  },
+  {
+    id: 3,
+    name: "ふるさと納税 A5黒毛和牛",
+    category: "食品・グルメ",
+    clicks: 5200,
+    conversions: 142,
+    cvr: 2.7,
+    revenue: 12780,
+    commission: 1.0,
+    trend: "+22.4%",
+    positive: true,
+  },
+  {
+    id: 4,
+    name: "資生堂 エリクシール化粧水",
+    category: "美容・コスメ",
+    clicks: 2980,
+    conversions: 134,
+    cvr: 4.5,
+    revenue: 10720,
+    commission: 3.5,
+    trend: "-2.1%",
+    positive: false,
+  },
+  {
+    id: 5,
+    name: "コカ・コーラ 500ml 48本",
+    category: "食品・飲料",
+    clicks: 6100,
+    conversions: 118,
+    cvr: 1.9,
+    revenue: 9440,
+    commission: 1.5,
+    trend: "+3.8%",
+    positive: true,
+  },
+];
+
+const campaigns = [
+  {
+    name: "楽天スーパーSALE特集",
+    status: "active",
+    startDate: "2026/05/15",
+    endDate: "2026/05/21",
+    products: 28,
+    clicks: 18400,
+    revenue: 42300,
+    budget: 50000,
+  },
+  {
+    name: "母の日ギフト特集",
+    status: "active",
+    startDate: "2026/05/01",
+    endDate: "2026/05/19",
+    products: 15,
+    clicks: 9200,
+    revenue: 21400,
+    budget: 30000,
+  },
+  {
+    name: "初夏の家電セール",
+    status: "scheduled",
+    startDate: "2026/05/25",
+    endDate: "2026/06/05",
+    products: 20,
+    clicks: 0,
+    revenue: 0,
+    budget: 40000,
+  },
+  {
+    name: "春のコスメ特集",
+    status: "ended",
+    startDate: "2026/04/01",
+    endDate: "2026/04/30",
+    products: 18,
+    clicks: 22100,
+    revenue: 38900,
+    budget: 35000,
+  },
+];
+
+const aiRecommendations = [
+  {
+    name: "ダイソン V15 掃除機",
+    category: "家電",
+    expectedRevenue: 28000,
+    competitionScore: 72,
+    demandScore: 91,
+    reason: "楽天スーパーSALE期間中に掃除機カテゴリの検索が急増。高単価かつコミッション率3%で高収益が見込まれる。",
+    commission: "3.0%",
+    price: "¥89,000",
+  },
+  {
+    name: "ふるさと納税 カニ 2kg",
+    category: "食品",
+    expectedRevenue: 19500,
+    competitionScore: 58,
+    demandScore: 88,
+    reason: "ふるさと納税の年間上限額を使い切ろうとするユーザーが5月末に急増するパターンを検知。",
+    commission: "1.0%",
+    price: "¥39,000",
+  },
+  {
+    name: "iPad Air M2",
+    category: "PC・タブレット",
+    expectedRevenue: 15200,
+    competitionScore: 84,
+    demandScore: 79,
+    reason: "新学期・在宅ワーク需要が継続。楽天ポイント還元との組み合わせでコンバージョン率が高い傾向。",
+    commission: "2.0%",
+    price: "¥95,800",
+  },
+];
+
+const goals = [
+  { label: "月間収益目標", current: 127450, target: 150000, unit: "¥" },
+  { label: "月間クリック目標", current: 48320, target: 60000, unit: "" },
+  { label: "アクティブ商品数", current: 84, target: 100, unit: "" },
+  { label: "平均CVR目標", current: 3.2, target: 4.0, unit: "%" },
+];
+
+const statusColors: Record<string, { bg: string; text: string; label: string }> = {
+  active: { bg: "rgba(16,185,129,0.15)", text: "#10b981", label: "実施中" },
+  scheduled: { bg: "rgba(59,130,246,0.15)", text: "#3b82f6", label: "予定" },
+  ended: { bg: "rgba(107,114,128,0.15)", text: "#6b7280", label: "終了" },
+};
+
+function ProgressBar({ current, target }: { current: number; target: number }) {
+  const pct = Math.min(100, Math.round((current / target) * 100));
+  const color = pct >= 90 ? "#10b981" : pct >= 70 ? "#3b82f6" : "#f59e0b";
+  return (
+    <div>
+      <div className="flex justify-between text-xs mb-1" style={{ color: "#9ca3af" }}>
+        <span>{pct}% 達成</span>
+        <span>残り {Math.round(((target - current) / target) * 100)}%</span>
+      </div>
+      <div className="h-2 rounded-full overflow-hidden" style={{ background: "#1f2937" }}>
+        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
+      </div>
+    </div>
+  );
 }
 
-const STORAGE_KEY = "rakuten_affiliate_posts"
-
-function loadPosts(): SavedPost[] {
-  if (typeof window === "undefined") return []
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]") } catch { return [] }
-}
-function savePosts(posts: SavedPost[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(posts))
-}
-
-function buildCmImageUrl(item: RakutenItem): string {
-  const base = typeof window !== "undefined" ? window.location.origin : ""
-  const params = new URLSearchParams({
-    itemName: item.itemName,
-    price: String(item.itemPrice),
-    imageUrl: item.mediumImageUrls[0]?.imageUrl || "",
-    reviewAverage: String(item.reviewAverage),
-    reviewCount: String(item.reviewCount),
-    shopName: item.shopName,
-    account: "@otoku_ai_life",
-  })
-  return `${base}/api/rakuten/generate-image?${params.toString()}`
+function RevenueChart() {
+  const max = Math.max(...monthlyRevenue.map((d) => d.revenue));
+  return (
+    <div className="flex items-end gap-3 h-28">
+      {monthlyRevenue.map((d, i) => {
+        const h = Math.round((d.revenue / max) * 100);
+        const isLatest = i === monthlyRevenue.length - 1;
+        return (
+          <div key={d.month} className="flex-1 flex flex-col items-center gap-1">
+            <span className="text-xs font-mono" style={{ color: isLatest ? "#10b981" : "#6b7280" }}>
+              ¥{(d.revenue / 1000).toFixed(0)}k
+            </span>
+            <div
+              className="w-full rounded-t"
+              style={{
+                height: `${h}%`,
+                background: isLatest ? "#10b981" : "#1f2937",
+                border: isLatest ? "1px solid rgba(16,185,129,0.4)" : "1px solid #374151",
+              }}
+            />
+            <span className="text-xs" style={{ color: "#6b7280" }}>
+              {d.month}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function RakutenAffiliatePage() {
-  const [tab, setTab] = useState<Tab>("search")
-  const [keyword, setKeyword] = useState("")
-  const [searching, setSearching] = useState(false)
-  const [searchResults, setSearchResults] = useState<RakutenItem[]>([])
-  const [selectedItem, setSelectedItem] = useState<RakutenItem | null>(null)
-  const [tone, setTone] = useState<Tone>("熱量高め")
-  const [generating, setGenerating] = useState(false)
-  const [generatedPost, setGeneratedPost] = useState<GeneratedPost | null>(null)
-  const [cmImageUrl, setCmImageUrl] = useState<string | null>(null)
-  const [showCmPreview, setShowCmPreview] = useState(false)
-  const [savedPosts, setSavedPosts] = useState<SavedPost[]>([])
-  const [posting, setPosting] = useState<"instagram" | "threads" | "auto" | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
-  const [expandedPost, setExpandedPost] = useState<string | null>(null)
-  const [editNote, setEditNote] = useState<{ id: string; text: string } | null>(null)
-
-  useEffect(() => { setSavedPosts(loadPosts()) }, [])
-
-  async function handleSearch(e: React.FormEvent) {
-    e.preventDefault()
-    if (!keyword.trim()) return
-    setSearching(true)
-    setError(null)
-    try {
-      const res = await fetch(`/api/rakuten/search?keyword=${encodeURIComponent(keyword)}&hits=12`)
-      const json = await res.json()
-      if (json.success) setSearchResults(json.data)
-      else setError(json.error)
-    } catch { setError("検索に失敗しました") }
-    finally { setSearching(false) }
-  }
-
-  async function handleGenerate() {
-    if (!selectedItem) return
-    setGenerating(true)
-    setError(null)
-    setGeneratedPost(null)
-    setShowCmPreview(false)
-    try {
-      const res = await fetch("/api/rakuten/generate-post", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          itemName: selectedItem.itemName,
-          itemPrice: selectedItem.itemPrice,
-          catchcopy: selectedItem.catchcopy,
-          itemCaption: selectedItem.itemCaption,
-          shopName: selectedItem.shopName,
-          reviewAverage: selectedItem.reviewAverage,
-          reviewCount: selectedItem.reviewCount,
-          affiliateUrl: selectedItem.affiliateUrl || selectedItem.itemUrl,
-          tone,
-          isAnime: true,
-        }),
-      })
-      const json = await res.json()
-      if (json.success) {
-        setGeneratedPost(json.data)
-        setCmImageUrl(buildCmImageUrl(selectedItem))
-        setShowCmPreview(true)
-      } else setError(json.error)
-    } catch { setError("投稿文の生成に失敗しました") }
-    finally { setGenerating(false) }
-  }
-
-  // ワンクリック全自動投稿
-  async function handleAutoPost() {
-    if (!selectedItem || !generatedPost) return
-    setPosting("auto")
-    setError(null)
-
-    const imageUrl = cmImageUrl || selectedItem.mediumImageUrls[0]?.imageUrl
-
-    try {
-      const res = await fetch("/api/rakuten/post-instagram", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          caption: generatedPost.instagram,
-          imageUrl,
-        }),
-      })
-      const json = await res.json()
-      if (json.success) {
-        // 保存して完了
-        const post: SavedPost = {
-          id: Date.now().toString(),
-          createdAt: new Date().toISOString(),
-          item: selectedItem,
-          generated: generatedPost,
-          cmImageUrl: imageUrl,
-          postedInstagram: true,
-          postedThreads: false,
-          instagramPostId: json.postId,
-        }
-        const updated = [post, ...savedPosts]
-        setSavedPosts(updated)
-        savePosts(updated)
-        setSuccess("🎉 Instagramに投稿しました！")
-        setGeneratedPost(null)
-        setSelectedItem(null)
-        setShowCmPreview(false)
-        setTab("posts")
-        setTimeout(() => setSuccess(null), 5000)
-      } else if (json.setupRequired) {
-        setError(`設定が必要: ${json.error}`)
-      } else {
-        setError(json.error)
-      }
-    } catch { setError("投稿に失敗しました") }
-    finally { setPosting(null) }
-  }
-
-  function handleSavePost() {
-    if (!selectedItem || !generatedPost) return
-    const post: SavedPost = {
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-      item: selectedItem,
-      generated: generatedPost,
-      cmImageUrl: cmImageUrl || undefined,
-      postedInstagram: false,
-      postedThreads: false,
-    }
-    const updated = [post, ...savedPosts]
-    setSavedPosts(updated)
-    savePosts(updated)
-    setSuccess("投稿を保存しました")
-    setTab("posts")
-    setTimeout(() => setSuccess(null), 3000)
-  }
-
-  const handlePostToSocial = useCallback(async (
-    postId: string,
-    platform: "instagram" | "threads"
-  ) => {
-    const post = savedPosts.find(p => p.id === postId)
-    if (!post) return
-    setPosting(platform)
-    setError(null)
-    const text = platform === "instagram" ? post.generated.instagram : post.generated.threads
-    const endpoint = platform === "instagram" ? "/api/rakuten/post-instagram" : "/api/rakuten/post-threads"
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          caption: text,
-          text,
-          imageUrl: post.cmImageUrl || post.item.mediumImageUrls[0]?.imageUrl,
-        }),
-      })
-      const json = await res.json()
-      if (json.success) {
-        const updated = savedPosts.map(p =>
-          p.id === postId ? {
-            ...p,
-            postedInstagram: platform === "instagram" ? true : p.postedInstagram,
-            postedThreads: platform === "threads" ? true : p.postedThreads,
-            instagramPostId: platform === "instagram" ? json.postId : p.instagramPostId,
-            threadsPostId: platform === "threads" ? json.postId : p.threadsPostId,
-          } : p
-        )
-        setSavedPosts(updated)
-        savePosts(updated)
-        setSuccess(`${platform === "instagram" ? "Instagram" : "Threads"}に投稿しました`)
-        setTimeout(() => setSuccess(null), 3000)
-      } else if (json.setupRequired) {
-        setError(`設定が必要: ${json.error}`)
-      } else {
-        setError(json.error)
-      }
-    } catch { setError("投稿に失敗しました") }
-    finally { setPosting(null) }
-  }, [savedPosts])
-
-  function handleDeletePost(id: string) {
-    const updated = savedPosts.filter(p => p.id !== id)
-    setSavedPosts(updated)
-    savePosts(updated)
-  }
-
-  function handleSaveNote(id: string) {
-    if (!editNote) return
-    const updated = savedPosts.map(p => p.id === id ? { ...p, note: editNote.text } : p)
-    setSavedPosts(updated)
-    savePosts(updated)
-    setEditNote(null)
-  }
-
-  const postedCount = savedPosts.filter(p => p.postedInstagram || p.postedThreads).length
+  const [activeTab, setActiveTab] = useState<"products" | "campaigns">("products");
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-8 space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">🛒 楽天アフィリエイト管理</h1>
-          <p className="text-sm text-slate-400 mt-1">商品リサーチ → CM画像生成 → Instagram自動投稿</p>
+          <div className="flex items-center gap-3 mb-1">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-lg"
+              style={{ background: "linear-gradient(135deg, #bf0000, #ff4d4d)" }}
+            >
+              🛒
+            </div>
+            <h1 className="text-2xl font-bold text-white">楽天アフィリエイト 経営ダッシュボード</h1>
+          </div>
+          <p className="text-sm" style={{ color: "#6b7280" }}>
+            2026年5月 | 収益・キャンペーン・商品を一元管理
+          </p>
         </div>
-        <div className="flex gap-3 text-center">
-          {[
-            { label: "保存済み投稿", value: savedPosts.length },
-            { label: "投稿済み", value: postedCount },
-          ].map(stat => (
-            <div key={stat.label} className="px-4 py-2 rounded-lg text-sm" style={{ background: "#111827", border: "1px solid #1f2937" }}>
-              <p className="text-xl font-bold text-white">{stat.value}</p>
-              <p className="text-xs text-slate-400">{stat.label}</p>
+        <div className="flex items-center gap-3">
+          <button
+            className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            style={{ background: "#bf0000", color: "white" }}
+          >
+            + 新規商品追加
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-4 gap-4">
+        {kpiCards.map((card) => (
+          <div
+            key={card.label}
+            className="rounded-xl p-5"
+            style={{ background: "#111827", border: "1px solid #1f2937" }}
+          >
+            <div className="flex items-start justify-between mb-3">
+              <span className="text-2xl">{card.icon}</span>
+              <span
+                className="text-xs px-2 py-0.5 rounded-full"
+                style={{
+                  background: `${card.color}22`,
+                  color: card.color,
+                  border: `1px solid ${card.color}44`,
+                }}
+              >
+                {card.sub}
+              </span>
+            </div>
+            <p className="text-2xl font-bold text-white mb-1">{card.value}</p>
+            <p className="text-xs" style={{ color: "#6b7280" }}>
+              {card.label}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-3 gap-6">
+        {/* Revenue Chart */}
+        <div
+          className="col-span-2 rounded-xl p-5"
+          style={{ background: "#111827", border: "1px solid #1f2937" }}
+        >
+          <h2 className="text-base font-semibold text-white mb-4">月次収益推移</h2>
+          <RevenueChart />
+        </div>
+
+        {/* Goals */}
+        <div
+          className="rounded-xl p-5"
+          style={{ background: "#111827", border: "1px solid #1f2937" }}
+        >
+          <h2 className="text-base font-semibold text-white mb-4">目標達成率</h2>
+          <div className="space-y-4">
+            {goals.map((g) => (
+              <div key={g.label}>
+                <div className="flex justify-between text-sm mb-1">
+                  <span style={{ color: "#d1d5db" }}>{g.label}</span>
+                  <span className="text-white font-mono">
+                    {g.unit}
+                    {g.current.toLocaleString()}
+                    {g.unit === "%" ? "" : ""}
+                    <span style={{ color: "#6b7280" }}>
+                      {" "}
+                      / {g.unit}
+                      {g.target.toLocaleString()}
+                      {g.unit === "%" ? "%" : ""}
+                    </span>
+                  </span>
+                </div>
+                <ProgressBar current={g.current} target={g.target} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* AI Recommendations */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-white">AI推奨商品 — 今週稼ぐべき商品</h2>
+          <span
+            className="text-xs px-3 py-1 rounded-full"
+            style={{ background: "rgba(59,130,246,0.15)", color: "#3b82f6", border: "1px solid rgba(59,130,246,0.3)" }}
+          >
+            Claude AI分析
+          </span>
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          {aiRecommendations.map((rec) => (
+            <div
+              key={rec.name}
+              className="rounded-xl p-4"
+              style={{ background: "#111827", border: "1px solid #1f2937" }}
+            >
+              <div className="flex items-start justify-between mb-2">
+                <span
+                  className="text-xs px-2 py-0.5 rounded-full"
+                  style={{ background: "rgba(191,0,0,0.15)", color: "#ff6b6b", border: "1px solid rgba(191,0,0,0.3)" }}
+                >
+                  {rec.category}
+                </span>
+                <span className="text-sm font-bold" style={{ color: "#10b981" }}>
+                  +¥{rec.expectedRevenue.toLocaleString()}見込
+                </span>
+              </div>
+              <p className="font-semibold text-white text-sm mb-2">{rec.name}</p>
+              <p className="text-xs leading-relaxed mb-3" style={{ color: "#9ca3af" }}>
+                {rec.reason}
+              </p>
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <div className="text-center">
+                  <p className="text-xs mb-1" style={{ color: "#6b7280" }}>需要</p>
+                  <p className="text-sm font-bold" style={{ color: "#10b981" }}>{rec.demandScore}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs mb-1" style={{ color: "#6b7280" }}>競合</p>
+                  <p className="text-sm font-bold" style={{ color: rec.competitionScore >= 80 ? "#ef4444" : "#f59e0b" }}>
+                    {rec.competitionScore}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs mb-1" style={{ color: "#6b7280" }}>報酬率</p>
+                  <p className="text-sm font-bold text-white">{rec.commission}</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono" style={{ color: "#6b7280" }}>{rec.price}</span>
+                <button
+                  className="text-xs px-3 py-1 rounded-lg font-medium transition-colors"
+                  style={{ background: "#bf0000", color: "white" }}
+                >
+                  追加する
+                </button>
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Alerts */}
-      {error && (
-        <div className="px-4 py-3 rounded-lg text-sm text-red-300" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)" }}>
-          ⚠️ {error}
+      {/* Products & Campaigns Tabs */}
+      <div>
+        <div className="flex items-center gap-4 mb-4">
+          <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid #1f2937" }}>
+            <button
+              onClick={() => setActiveTab("products")}
+              className="px-4 py-2 text-sm font-medium transition-colors"
+              style={{
+                background: activeTab === "products" ? "#1f2937" : "transparent",
+                color: activeTab === "products" ? "white" : "#6b7280",
+              }}
+            >
+              商品パフォーマンス
+            </button>
+            <button
+              onClick={() => setActiveTab("campaigns")}
+              className="px-4 py-2 text-sm font-medium transition-colors"
+              style={{
+                background: activeTab === "campaigns" ? "#1f2937" : "transparent",
+                color: activeTab === "campaigns" ? "white" : "#6b7280",
+              }}
+            >
+              キャンペーン管理
+            </button>
+          </div>
         </div>
-      )}
-      {success && (
-        <div className="px-4 py-3 rounded-lg text-sm text-emerald-300" style={{ background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)" }}>
-          {success}
-        </div>
-      )}
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-lg" style={{ background: "#111827", border: "1px solid #1f2937" }}>
-        {(["search", "posts", "settings"] as Tab[]).map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`flex-1 py-2 text-sm rounded-md transition-all ${tab === t ? "bg-slate-700 text-white font-medium" : "text-slate-400 hover:text-white"}`}
+        {activeTab === "products" && (
+          <div
+            className="rounded-xl overflow-hidden"
+            style={{ background: "#111827", border: "1px solid #1f2937" }}
           >
-            {t === "search" ? "🔍 商品リサーチ" : t === "posts" ? `📋 投稿管理 (${savedPosts.length})` : "⚙️ 設定"}
-          </button>
-        ))}
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: "1px solid #1f2937" }}>
+                  {["商品名", "カテゴリ", "クリック", "CV数", "CVR", "収益", "報酬率", "推移"].map((h) => (
+                    <th key={h} className="text-left px-4 py-3 text-xs font-medium" style={{ color: "#6b7280" }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {topProducts.map((p, i) => (
+                  <tr
+                    key={p.id}
+                    className="hover:bg-white/5 transition-colors"
+                    style={{ borderBottom: i < topProducts.length - 1 ? "1px solid #1f2937" : "none" }}
+                  >
+                    <td className="px-4 py-3 font-medium text-white">{p.name}</td>
+                    <td className="px-4 py-3">
+                      <span
+                        className="text-xs px-2 py-0.5 rounded-full"
+                        style={{ background: "rgba(107,114,128,0.2)", color: "#9ca3af" }}
+                      >
+                        {p.category}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-mono" style={{ color: "#d1d5db" }}>
+                      {p.clicks.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 font-mono" style={{ color: "#d1d5db" }}>
+                      {p.conversions}
+                    </td>
+                    <td className="px-4 py-3 font-mono font-bold" style={{ color: "#3b82f6" }}>
+                      {p.cvr}%
+                    </td>
+                    <td className="px-4 py-3 font-mono font-bold text-white">
+                      ¥{p.revenue.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 font-mono" style={{ color: "#9ca3af" }}>
+                      {p.commission}%
+                    </td>
+                    <td className="px-4 py-3 font-bold" style={{ color: p.positive ? "#10b981" : "#ef4444" }}>
+                      {p.trend}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {activeTab === "campaigns" && (
+          <div className="space-y-3">
+            {campaigns.map((c) => {
+              const status = statusColors[c.status];
+              const pct = c.budget > 0 ? Math.min(100, Math.round((c.revenue / c.budget) * 100)) : 0;
+              return (
+                <div
+                  key={c.name}
+                  className="rounded-xl p-4"
+                  style={{ background: "#111827", border: "1px solid #1f2937" }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <span
+                        className="text-xs px-2 py-0.5 rounded-full font-medium"
+                        style={{ background: status.bg, color: status.text, border: `1px solid ${status.text}44` }}
+                      >
+                        {status.label}
+                      </span>
+                      <p className="font-semibold text-white">{c.name}</p>
+                    </div>
+                    <div className="flex items-center gap-6 text-sm">
+                      <div className="text-right">
+                        <p className="text-xs mb-0.5" style={{ color: "#6b7280" }}>期間</p>
+                        <p style={{ color: "#d1d5db" }}>
+                          {c.startDate} 〜 {c.endDate}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs mb-0.5" style={{ color: "#6b7280" }}>商品数</p>
+                        <p className="text-white font-bold">{c.products}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs mb-0.5" style={{ color: "#6b7280" }}>クリック</p>
+                        <p className="font-mono" style={{ color: "#d1d5db" }}>{c.clicks.toLocaleString()}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs mb-0.5" style={{ color: "#6b7280" }}>収益</p>
+                        <p className="font-mono font-bold text-white">¥{c.revenue.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  </div>
+                  {c.status !== "scheduled" && (
+                    <div>
+                      <div className="flex justify-between text-xs mb-1" style={{ color: "#6b7280" }}>
+                        <span>予算達成率 {pct}%</span>
+                        <span>目標: ¥{c.budget.toLocaleString()}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "#1f2937" }}>
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${pct}%`,
+                            background: pct >= 90 ? "#10b981" : pct >= 70 ? "#3b82f6" : "#f59e0b",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Search Tab */}
-      {tab === "search" && (
-        <div className="grid grid-cols-3 gap-6">
-          {/* Left: Search */}
-          <div className="col-span-1 space-y-4">
-            <form onSubmit={handleSearch} className="space-y-3">
-              <input
-                type="text" value={keyword} onChange={e => setKeyword(e.target.value)}
-                placeholder="例: フィギュア アニメ, 推しグッズ"
-                className="w-full px-3 py-2 rounded-lg text-sm text-white bg-transparent outline-none focus:ring-1 focus:ring-blue-500"
-                style={{ background: "#111827", border: "1px solid #1f2937" }}
-              />
-              <button type="submit" disabled={searching}
-                className="w-full py-2 text-sm rounded-lg font-medium transition-colors disabled:opacity-50"
-                style={{ background: "#3b82f6", color: "white" }}
-              >
-                {searching ? "検索中..." : "🔍 楽天で検索"}
-              </button>
-            </form>
-
-            {searchResults.length > 0 && (
-              <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-                {searchResults.map(item => (
-                  <button key={item.itemCode} onClick={() => { setSelectedItem(item); setGeneratedPost(null); setShowCmPreview(false) }}
-                    className={`w-full text-left p-3 rounded-lg border transition-all ${selectedItem?.itemCode === item.itemCode ? "border-blue-500/60 bg-blue-500/10" : "border-slate-700/50 bg-slate-800/40 hover:border-slate-600"}`}
-                  >
-                    <div className="flex gap-2">
-                      {item.mediumImageUrls[0] && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={item.mediumImageUrls[0].imageUrl} alt="" className="w-12 h-12 object-cover rounded" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-white font-medium line-clamp-2 leading-tight">{item.itemName}</p>
-                        <p className="text-xs text-emerald-400 font-bold mt-1">¥{item.itemPrice.toLocaleString()}</p>
-                        <p className="text-xs text-slate-500">★{item.reviewAverage} ({item.reviewCount}件)</p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Right: Generator */}
-          <div className="col-span-2 space-y-4">
-            {selectedItem ? (
-              <>
-                {/* Selected item */}
-                <div className="rounded-xl p-4 flex gap-4" style={{ background: "#111827", border: "1px solid #1f2937" }}>
-                  {selectedItem.mediumImageUrls[0] && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={selectedItem.mediumImageUrls[0].imageUrl} alt="" className="w-20 h-20 object-cover rounded-lg flex-shrink-0" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-semibold text-sm leading-tight mb-1">{selectedItem.itemName}</p>
-                    <p className="text-emerald-400 font-bold text-lg">¥{selectedItem.itemPrice.toLocaleString()}</p>
-                    <p className="text-xs text-slate-400">{selectedItem.shopName} · ★{selectedItem.reviewAverage}（{selectedItem.reviewCount}件）</p>
-                  </div>
-                </div>
-
-                {/* Tone + Generate */}
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span className="text-xs text-slate-400">トーン:</span>
-                  {(["カジュアル", "丁寧", "熱量高め"] as Tone[]).map(t => (
-                    <button key={t} onClick={() => setTone(t)}
-                      className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${tone === t ? "border-purple-500 bg-purple-500/20 text-purple-300" : "border-slate-700 text-slate-400 hover:text-white"}`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                  <button onClick={handleGenerate} disabled={generating}
-                    className="ml-auto px-4 py-2 text-sm rounded-lg font-medium transition-colors disabled:opacity-50"
-                    style={{ background: "#8b5cf6", color: "white" }}
-                  >
-                    {generating ? "✨ 生成中..." : "✨ CM＆投稿文を生成"}
-                  </button>
-                </div>
-
-                {/* CM Image Preview */}
-                {showCmPreview && cmImageUrl && (
-                  <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #1f2937" }}>
-                    <div className="px-4 py-2 flex items-center justify-between" style={{ background: "#111827" }}>
-                      <span className="text-sm font-semibold text-pink-400">🎬 CM画像プレビュー</span>
-                      <span className="text-xs text-slate-400">Instagram用 1080×1080</span>
-                    </div>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={cmImageUrl} alt="CM" className="w-full" style={{ maxHeight: 400, objectFit: "contain", background: "#0d1117" }} />
-                  </div>
-                )}
-
-                {/* Generated post */}
-                {generatedPost && (
-                  <div className="space-y-3">
-                    {/* Instagram */}
-                    <div className="rounded-xl p-4" style={{ background: "#111827", border: "1px solid #1f2937" }}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-semibold text-pink-400">📸 Instagram 投稿文</span>
-                        <button onClick={() => navigator.clipboard.writeText(generatedPost.instagram)} className="text-xs text-slate-400 hover:text-white">コピー</button>
-                      </div>
-                      <pre className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed font-sans max-h-40 overflow-y-auto">{generatedPost.instagram}</pre>
-                    </div>
-
-                    {/* Threads */}
-                    <div className="rounded-xl p-4" style={{ background: "#111827", border: "1px solid #1f2937" }}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-semibold text-slate-300">🧵 Threads 投稿文</span>
-                        <button onClick={() => navigator.clipboard.writeText(generatedPost.threads)} className="text-xs text-slate-400 hover:text-white">コピー</button>
-                      </div>
-                      <pre className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed font-sans max-h-32 overflow-y-auto">{generatedPost.threads}</pre>
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <button onClick={handleSavePost}
-                        className="py-2.5 text-sm font-semibold rounded-lg transition-colors"
-                        style={{ background: "#374151", color: "white" }}
-                      >
-                        💾 保存（後で投稿）
-                      </button>
-                      <button onClick={handleAutoPost} disabled={posting === "auto"}
-                        className="py-2.5 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
-                        style={{ background: posting === "auto" ? "#374151" : "linear-gradient(135deg, #ec4899, #8b5cf6)", color: "white" }}
-                      >
-                        {posting === "auto" ? "📤 投稿中..." : "🚀 今すぐInstagramに投稿！"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="flex items-center justify-center h-48 text-slate-500 text-sm rounded-xl" style={{ border: "1px dashed #374151" }}>
-                左から商品を選択してください
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Posts Tab */}
-      {tab === "posts" && (
-        <div className="space-y-4">
-          {savedPosts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-slate-500 space-y-3">
-              <p className="text-4xl">📭</p>
-              <p className="text-sm">保存済みの投稿がありません</p>
-              <button onClick={() => setTab("search")} className="text-xs text-blue-400 hover:underline">商品リサーチへ</button>
+      {/* Business Summary */}
+      <div
+        className="rounded-xl p-5"
+        style={{ background: "#111827", border: "1px solid #1f2937" }}
+      >
+        <h2 className="text-base font-semibold text-white mb-4">📊 経営サマリー — 今月の状況</h2>
+        <div className="grid grid-cols-4 gap-4">
+          {[
+            { label: "売上総利益", value: "¥127,450", note: "コミッション収益合計" },
+            { label: "年間換算収益", value: "¥1,529,400", note: "現月ペースで換算" },
+            { label: "最高CVR商品", value: "美容コスメ 4.5%", note: "資生堂 エリクシール" },
+            { label: "次回セール予測", value: "¥182,000", note: "スーパーSALE効果含む" },
+          ].map((item) => (
+            <div key={item.label} className="rounded-lg p-4" style={{ background: "#0a0f1e" }}>
+              <p className="text-xs mb-2" style={{ color: "#6b7280" }}>{item.label}</p>
+              <p className="text-xl font-bold text-white mb-1">{item.value}</p>
+              <p className="text-xs" style={{ color: "#4b5563" }}>{item.note}</p>
             </div>
-          ) : (
-            savedPosts.map(post => (
-              <div key={post.id} className="rounded-xl overflow-hidden" style={{ background: "#111827", border: "1px solid #1f2937" }}>
-                <div className="p-4 flex items-start gap-4">
-                  {/* CM image or product image */}
-                  {post.cmImageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={post.cmImageUrl} alt="" className="w-16 h-16 object-cover rounded-lg flex-shrink-0" />
-                  ) : post.item.mediumImageUrls[0] && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={post.item.mediumImageUrls[0].imageUrl} alt="" className="w-16 h-16 object-cover rounded-lg flex-shrink-0" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-semibold text-sm leading-tight">{post.item.itemName}</p>
-                    <p className="text-emerald-400 font-bold">¥{post.item.itemPrice.toLocaleString()}</p>
-                    <p className="text-xs text-slate-500">{new Date(post.createdAt).toLocaleDateString("ja-JP")} 保存</p>
-                    <div className="flex gap-2 mt-2 flex-wrap">
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${post.postedInstagram ? "text-pink-300 bg-pink-400/10 border-pink-400/30" : "text-slate-500 bg-slate-800 border-slate-700"}`}>
-                        📸 {post.postedInstagram ? "Instagram投稿済" : "未投稿"}
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${post.postedThreads ? "text-slate-200 bg-slate-600/50 border-slate-500" : "text-slate-500 bg-slate-800 border-slate-700"}`}>
-                        🧵 {post.postedThreads ? "Threads投稿済" : "未投稿"}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 flex-shrink-0">
-                    <button onClick={() => setExpandedPost(expandedPost === post.id ? null : post.id)}
-                      className="text-xs px-3 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-white transition-colors"
-                    >
-                      {expandedPost === post.id ? "閉じる" : "詳細"}
-                    </button>
-                    <button onClick={() => handleDeletePost(post.id)}
-                      className="text-xs px-2 py-1.5 rounded-lg border border-red-900/50 text-red-400 hover:bg-red-400/10 transition-colors"
-                    >
-                      削除
-                    </button>
-                  </div>
-                </div>
-
-                {expandedPost === post.id && (
-                  <div className="px-4 pb-4 space-y-3" style={{ borderTop: "1px solid #1f2937" }}>
-                    <div className="pt-3 grid grid-cols-2 gap-3">
-                      <div className="rounded-lg p-3" style={{ background: "#0d1117" }}>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-semibold text-pink-400">📸 Instagram</span>
-                          <button onClick={() => handlePostToSocial(post.id, "instagram")}
-                            disabled={posting === "instagram" || post.postedInstagram}
-                            className="text-xs px-2 py-1 rounded bg-pink-600 hover:bg-pink-500 disabled:opacity-40 text-white"
-                          >
-                            {posting === "instagram" ? "投稿中..." : post.postedInstagram ? "投稿済" : "投稿する"}
-                          </button>
-                        </div>
-                        <pre className="text-xs text-slate-400 whitespace-pre-wrap font-sans max-h-28 overflow-y-auto leading-relaxed">{post.generated.instagram}</pre>
-                      </div>
-                      <div className="rounded-lg p-3" style={{ background: "#0d1117" }}>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-semibold text-slate-300">🧵 Threads</span>
-                          <button onClick={() => handlePostToSocial(post.id, "threads")}
-                            disabled={posting === "threads" || post.postedThreads}
-                            className="text-xs px-2 py-1 rounded bg-slate-600 hover:bg-slate-500 disabled:opacity-40 text-white"
-                          >
-                            {posting === "threads" ? "投稿中..." : post.postedThreads ? "投稿済" : "投稿する"}
-                          </button>
-                        </div>
-                        <pre className="text-xs text-slate-400 whitespace-pre-wrap font-sans max-h-28 overflow-y-auto leading-relaxed">{post.generated.threads}</pre>
-                      </div>
-                    </div>
-
-                    {/* Note */}
-                    <div>
-                      {editNote?.id === post.id ? (
-                        <div className="flex gap-2">
-                          <input autoFocus value={editNote.text} onChange={e => setEditNote({ id: post.id, text: e.target.value })}
-                            placeholder="反省点・改善メモ..."
-                            className="flex-1 px-3 py-1.5 text-xs rounded-lg text-white bg-transparent outline-none focus:ring-1 focus:ring-blue-500"
-                            style={{ background: "#0d1117", border: "1px solid #374151" }}
-                          />
-                          <button onClick={() => handleSaveNote(post.id)} className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white">保存</button>
-                          <button onClick={() => setEditNote(null)} className="text-xs px-2 py-1.5 rounded-lg border border-slate-700 text-slate-400">×</button>
-                        </div>
-                      ) : (
-                        <button onClick={() => setEditNote({ id: post.id, text: post.note || "" })}
-                          className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
-                        >
-                          {post.note ? `📝 ${post.note}` : "+ 反省点・改善メモを追加"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))
-          )}
+          ))}
         </div>
-      )}
-
-      {/* Settings Tab */}
-      {tab === "settings" && (
-        <div className="max-w-xl space-y-4">
-          <div className="rounded-xl p-5 space-y-3" style={{ background: "#111827", border: "1px solid #1f2937" }}>
-            <h2 className="text-sm font-semibold text-white">✅ 設定済みの環境変数</h2>
-            {[
-              { key: "RAKUTEN_APP_ID", status: true },
-              { key: "RAKUTEN_AFFILIATE_ID", status: true },
-              { key: "ANTHROPIC_API_KEY", status: true },
-              { key: "INSTAGRAM_ACCESS_TOKEN", status: true },
-              { key: "INSTAGRAM_USER_ID", status: true },
-              { key: "THREADS_ACCESS_TOKEN", status: false },
-              { key: "THREADS_USER_ID", status: false },
-            ].map(item => (
-              <div key={item.key} className="flex items-center justify-between text-xs rounded-lg p-2" style={{ background: "#0d1117" }}>
-                <code className="text-slate-300 font-mono">{item.key}</code>
-                <span className={item.status ? "text-emerald-400" : "text-slate-500"}>
-                  {item.status ? "✅ 設定済み" : "⏳ 未設定"}
-                </span>
-              </div>
-            ))}
-          </div>
-          <div className="rounded-xl p-5 space-y-2" style={{ background: "#111827", border: "1px solid #1f2937" }}>
-            <h2 className="text-sm font-semibold text-white">📊 楽天アフィリエイト成果確認</h2>
-            <a href="https://affiliate.rakuten.co.jp/" target="_blank" rel="noopener noreferrer"
-              className="inline-block text-xs text-blue-400 hover:underline"
-            >
-              楽天アフィリエイト管理画面を開く →
-            </a>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
-  )
+  );
 }
