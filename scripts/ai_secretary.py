@@ -43,7 +43,7 @@ def list_events_in_range(service, calendar_id, start_date, end_date):
             timeMin=time_min,
             timeMax=time_max,
             singleEvents=True,
-            orderBy="created",
+            orderBy="startTime",
         )
         .execute()
     )
