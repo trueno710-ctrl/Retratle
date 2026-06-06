@@ -1,0 +1,43 @@
+name: X投稿分析・自動投稿
+
+on:
+  schedule:
+    # 毎週火曜・金曜 18:00 JST = 09:00 UTC
+    - cron: '0 9 * * 2,5'
+  workflow_dispatch:  # 手動実行可
+
+jobs:
+  analyze-and-post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write  # data/x-posts/ へのコミットに必要
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python セットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 依存ライブラリインストール
+        run: pip install requests
+
+      - name: X投稿分析・自動投稿
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          X_API_KEY:         ${{ secrets.X_API_KEY }}
+          X_API_SECRET:      ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN:    ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_SECRET:   ${{ secrets.X_ACCESS_SECRET }}
+        run: python scripts/x_analysis_post.py
+
+      - name: 分析メモをコミット（Obsidian同期用）
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/x-posts/
+          git diff --staged --quiet || git commit -m "chore: X分析メモ自動保存 $(date +'%Y-%m-%d')"
+          git push
