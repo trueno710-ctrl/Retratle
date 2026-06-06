@@ -1,94 +1,398 @@
 #!/usr/bin/env python3
 """
-X投稿分析・自動投稿スクリプト
-- 監視アカウント: @shikiho_10（参考・分析元）
-- 投稿先アカウント: @FLUX22663176093（自分のアカウント）
-- data/x-feed/ に蓄積された投稿をClaude APIで分析
-- 投資有益情報をまとめて @FLUX22663176093 に自動投稿
-- 分析メモをdata/x-posts/に保存（Obsidian連携）
+AI株式ピッカー
+@shikiho_10 の過去選定銘柄から投資基準を学習し、
+同じパターンの新銘柄を自動発掘 → @FLUX22663176093 に投稿
 """
 
 import os
 import re
 import json
+import time
+import hmac
+import hashlib
+import base64
+import secrets
+import urllib.parse
 import requests
 from datetime import date, timedelta
 from pathlib import Path
 
 # ─── 設定 ────────────────────────────────────────────────
-ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
-X_API_KEY         = os.environ["X_API_KEY"]
-X_API_SECRET      = os.environ["X_API_SECRET"]
-X_ACCESS_TOKEN    = os.environ["X_ACCESS_TOKEN"]
-X_ACCESS_SECRET   = os.environ["X_ACCESS_SECRET"]
+ANTHROPIC_API_KEY   = os.environ["ANTHROPIC_API_KEY"]
+X_API_KEY           = os.environ["X_API_KEY"]
+X_API_SECRET        = os.environ["X_API_SECRET"]
+X_ACCESS_TOKEN      = os.environ["X_ACCESS_TOKEN"]
+X_ACCESS_SECRET     = os.environ["X_ACCESS_SECRET"]
+JQUANTS_REFRESH_TOKEN = os.environ.get("JQUANTS_REFRESH_TOKEN", "")
+JQUANTS_EMAIL       = os.environ.get("JQUANTS_EMAIL", "")
+JQUANTS_PASSWORD    = os.environ.get("JQUANTS_PASSWORD", "")
+NOTION_TOKEN        = os.environ.get("NOTION_TOKEN", "")
 
-MONITOR_ACCOUNTS = ["shikiho_10"]   # 監視・分析するアカウント
-POST_ACCOUNT     = "FLUX22663176093"  # 投稿先（自分のアカウント）
-DATA_DIR   = Path("data/x-feed")
-OUTPUT_DIR = Path("data/x-posts")
-
-CLAUDE_MODEL = "claude-sonnet-4-6"
-
-
-# ─── ツイート読み込み ────────────────────────────────────
-def load_recent_tweets(days: int = 7) -> list[dict]:
-    """直近N日分のツイートを全アカウントから読み込む"""
-    cutoff = date.today() - timedelta(days=days)
-    tweets = []
-
-    for account in MONITOR_ACCOUNTS:
-        folder = DATA_DIR / account
-        if not folder.exists():
-            continue
-        for md_file in sorted(folder.glob("*.md")):
-            try:
-                file_date = date.fromisoformat(md_file.stem[:10])
-            except ValueError:
-                continue
-            if file_date < cutoff:
-                continue
-            content = md_file.read_text(encoding="utf-8")
-            tweets.append({
-                "account": account,
-                "date": file_date.isoformat(),
-                "content": content,
-            })
-
-    return tweets
+NOTION_DS_ID   = "8f7b14d0-2e0f-4f24-b0a8-2b2e467c9a37"   # @shikiho_10 DB
+FEED_DIR       = Path("data/x-feed/shikiho_10")
+OUTPUT_DIR     = Path("data/x-posts")
+CLAUDE_MODEL   = "claude-sonnet-4-6"
+JQUANTS_BASE   = "https://api.jquants.com/v1"
+NOTION_BASE    = "https://api.notion.com/v1"
 
 
-# ─── Claude API 分析 ─────────────────────────────────────
-def analyze_with_claude(tweets: list[dict]) -> dict:
-    """ツイートを分析して投資有益情報と投稿文を生成"""
+# ══════════════════════════════════════════════════════════
+# STEP 1: @shikiho_10 の選定銘柄データを収集
+# ══════════════════════════════════════════════════════════
 
-    if not tweets:
-        return {"summary": "今週の対象投稿なし", "post_text": None}
-
-    tweets_text = "\n\n".join(
-        f"【@{t['account']} / {t['date']}】\n{t['content']}"
-        for t in tweets
+def load_notion_stocks() -> list[dict]:
+    """Notion DBから既存の選定銘柄を取得"""
+    if not NOTION_TOKEN:
+        return []
+    headers = {
+        "Authorization": f"Bearer {NOTION_TOKEN}",
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json",
+    }
+    resp = requests.post(
+        f"{NOTION_BASE}/databases/{NOTION_DS_ID.replace('-','')}/query",
+        headers=headers,
+        json={"page_size": 100},
     )
+    if not resp.ok:
+        print(f"Notion取得失敗: {resp.status_code}")
+        return []
 
-    prompt = f"""あなたは株式投資アナリストです。
-以下は今週の @shikiho_10 のX投稿です。これを参考に、@FLUX22663176093 として投稿する内容を作成してください。
+    stocks = []
+    for page in resp.json().get("results", []):
+        props = page.get("properties", {})
+        def get_num(key):
+            n = props.get(key, {}).get("number")
+            return n
 
-{tweets_text}
+        def get_text(key):
+            rich = props.get(key, {}).get("rich_text", [])
+            return rich[0]["plain_text"] if rich else ""
 
-【タスク1】投資に役立つ情報をまとめてください（箇条書き、500字以内）
-【タスク2】@FLUX22663176093 のアカウントでXに投稿する140字以内の日本語ツイートを1つ作成してください。
-  - @shikiho_10 の内容を参考にしつつ、独自の考察・視点を加える
-  - 具体的な銘柄・テーマ・数値を含める
-  - 「#テンバガー #株式投資 #四季報」のハッシュタグを末尾に付ける
-  - @shikiho_10 の投稿をそのままコピーせず、自分の言葉でまとめる
+        def get_title(key):
+            title = props.get(key, {}).get("title", [])
+            return title[0]["plain_text"] if title else ""
 
-以下のJSON形式で返してください：
+        def get_select(key):
+            s = props.get(key, {}).get("select")
+            return s["name"] if s else ""
+
+        def get_multi(key):
+            return [o["name"] for o in props.get(key, {}).get("multi_select", [])]
+
+        def get_check(key):
+            return props.get(key, {}).get("checkbox", False)
+
+        stocks.append({
+            "name":            get_title("銘柄名"),
+            "code":            get_text("コード"),
+            "shikiho":         get_select("四季報号"),
+            "market_cap":      get_num("時価総額_億円"),
+            "per":             get_num("PER予"),
+            "pbr":             get_num("PBR"),
+            "mix":             get_num("ミックス係数"),
+            "roe":             get_num("ROE予_%"),
+            "roa":             get_num("ROA予_%"),
+            "equity_ratio":    get_num("自己資本比率_%"),
+            "dividend":        get_num("配当利回り_%"),
+            "zero_debt":       get_check("有利子負債ゼロ"),
+            "themes":          get_multi("テーマ"),
+            "achieved_2x":     get_check("2バガー達成"),
+        })
+    return [s for s in stocks if s["name"]]
+
+
+def load_feed_posts(days: int = 180) -> list[str]:
+    """data/x-feed/shikiho_10 から過去N日分の投稿を読み込む"""
+    if not FEED_DIR.exists():
+        return []
+    cutoff = date.today() - timedelta(days=days)
+    posts = []
+    for f in sorted(FEED_DIR.glob("*.md")):
+        try:
+            d = date.fromisoformat(f.stem[:10])
+        except ValueError:
+            continue
+        if d >= cutoff:
+            posts.append(f.read_text(encoding="utf-8"))
+    return posts
+
+
+# ══════════════════════════════════════════════════════════
+# STEP 2: Claude でパターン抽出
+# ══════════════════════════════════════════════════════════
+
+def extract_criteria(stocks: list[dict], posts: list[str]) -> dict:
+    """@shikiho_10 の選定パターンをClaude AIで抽出"""
+
+    stocks_text = json.dumps(stocks, ensure_ascii=False, indent=2)
+    posts_text  = "\n\n---\n\n".join(posts[:30]) if posts else "（投稿データなし）"
+
+    prompt = f"""あなたは株式投資の分析専門家です。
+以下は @shikiho_10 が選定した銘柄データとX投稿です。
+
+## 選定銘柄データ（Notion DB）
+{stocks_text}
+
+## 過去のX投稿（抜粋）
+{posts_text}
+
+これらの銘柄に共通する投資選定基準を分析し、以下のJSON形式で返してください：
+
 {{
-  "summary": "まとめ文章",
-  "post_text": "140字以内のツイート文",
-  "tickers": ["1234", "5678"],
-  "themes": ["テーマ1", "テーマ2"]
+  "criteria": {{
+    "market_cap_max": 数値（億円）,
+    "mix_coeff_max": 数値（PER×PBR上限）,
+    "mix_coeff_excellent": 数値（◎の基準），
+    "roe_min": 数値（%）,
+    "roa_min": 数値（%）,
+    "equity_ratio_min": 数値（%）,
+    "prefer_zero_debt": true/false,
+    "target_multiple": 数値（何倍狙いか）
+  }},
+  "theme_keywords": ["テーマ1", "テーマ2", ...],
+  "pattern_summary": "選定パターンの説明（200字以内）",
+  "key_insights": ["特徴1", "特徴2", "特徴3"]
 }}"""
 
+    resp = _call_claude(prompt)
+    match = re.search(r"\{[\s\S]+\}", resp)
+    if match:
+        return json.loads(match.group())
+
+    # フォールバック: 既知の基準
+    return {
+        "criteria": {
+            "market_cap_max": 500,
+            "mix_coeff_max": 10,
+            "mix_coeff_excellent": 5,
+            "roe_min": 5.0,
+            "roa_min": 3.0,
+            "equity_ratio_min": 40.0,
+            "prefer_zero_debt": True,
+            "target_multiple": 2,
+        },
+        "theme_keywords": ["国策", "インフラ", "AI", "半導体", "DX", "省エネ", "国土強靭化"],
+        "pattern_summary": "時価総額500億以下・ミックス係数≤10・高自己資本・無借金の割安成長株",
+        "key_insights": [],
+    }
+
+
+# ══════════════════════════════════════════════════════════
+# STEP 3: J-Quants で新候補銘柄をスクリーニング
+# ══════════════════════════════════════════════════════════
+
+def jquants_token() -> str:
+    if JQUANTS_REFRESH_TOKEN:
+        try:
+            r = requests.post(
+                f"{JQUANTS_BASE}/token/auth_refresh",
+                params={"refreshtoken": JQUANTS_REFRESH_TOKEN},
+            )
+            r.raise_for_status()
+            return r.json()["idToken"]
+        except Exception:
+            pass
+    r = requests.post(
+        f"{JQUANTS_BASE}/token/auth_user",
+        json={"mailaddress": JQUANTS_EMAIL, "password": JQUANTS_PASSWORD},
+    )
+    r.raise_for_status()
+    refresh = r.json()["refreshToken"]
+    r2 = requests.post(
+        f"{JQUANTS_BASE}/token/auth_refresh",
+        params={"refreshtoken": refresh},
+    )
+    r2.raise_for_status()
+    return r2.json()["idToken"]
+
+
+def fetch_listed_info(token: str) -> list[dict]:
+    """上場銘柄一覧を取得"""
+    r = requests.get(
+        f"{JQUANTS_BASE}/listed/info",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    r.raise_for_status()
+    return r.json().get("info", [])
+
+
+def fetch_financials(token: str, code: str) -> dict:
+    """財務情報を取得"""
+    r = requests.get(
+        f"{JQUANTS_BASE}/fins/statements",
+        headers={"Authorization": f"Bearer {token}"},
+        params={"code": code},
+    )
+    if not r.ok:
+        return {}
+    data = r.json().get("statements", [])
+    return data[-1] if data else {}
+
+
+def fetch_price(token: str, code: str) -> dict:
+    """最新株価・PER・PBRを取得"""
+    today = date.today().strftime("%Y-%m-%d")
+    from_d = (date.today() - timedelta(days=5)).strftime("%Y-%m-%d")
+    r = requests.get(
+        f"{JQUANTS_BASE}/prices/daily_quotes",
+        headers={"Authorization": f"Bearer {token}"},
+        params={"code": code, "from": from_d, "to": today},
+    )
+    if not r.ok:
+        return {}
+    quotes = r.json().get("daily_quotes", [])
+    return quotes[-1] if quotes else {}
+
+
+def screen_candidates(
+    token: str,
+    criteria: dict,
+    known_codes: set[str],
+    max_candidates: int = 10,
+) -> list[dict]:
+    """基準に合う新候補銘柄をスクリーニング"""
+
+    c = criteria["criteria"]
+    print("上場銘柄一覧取得中...")
+    all_stocks = fetch_listed_info(token)
+
+    # 東証プライム・スタンダードに絞る
+    targets = [
+        s for s in all_stocks
+        if s.get("MarketCodeName") in ("プライム", "スタンダード")
+        and s.get("Code") not in known_codes
+    ]
+    print(f"  対象: {len(targets)}銘柄（既知{len(known_codes)}銘柄を除外）")
+
+    candidates = []
+    checked = 0
+
+    for stock in targets:
+        code = stock.get("Code", "")
+        if not code:
+            continue
+
+        price_data = fetch_price(token, code)
+        if not price_data:
+            continue
+
+        # 時価総額チェック（概算）
+        close   = price_data.get("Close", 0) or 0
+        shares  = price_data.get("TradingVolume", 0)  # 近似値
+        per     = price_data.get("PER", 0) or 0
+        pbr     = price_data.get("PBR", 0) or 0
+        market_cap_approx = price_data.get("MarketCapitalization", 0) or 0
+
+        if market_cap_approx == 0:
+            continue
+        market_cap_bil = market_cap_approx / 1e8
+
+        # フィルタリング
+        if market_cap_bil > c["market_cap_max"]:
+            continue
+        if per <= 0 or pbr <= 0:
+            continue
+
+        mix = per * pbr
+        if mix > c["mix_coeff_max"]:
+            continue
+
+        # 財務情報取得（通過銘柄のみ）
+        fin = fetch_financials(token, code)
+        equity_ratio = float(fin.get("EquityRatio", 0) or 0)
+        roe = float(fin.get("ROE", 0) or 0)
+        roa = float(fin.get("ROA", 0) or 0)
+
+        if equity_ratio < c["equity_ratio_min"]:
+            continue
+        if roe < c["roe_min"]:
+            continue
+
+        score = _score_stock(mix, c, roe, roa, equity_ratio)
+
+        candidates.append({
+            "code":         code,
+            "name":         stock.get("CompanyName", ""),
+            "sector":       stock.get("Sector33CodeName", ""),
+            "market":       stock.get("MarketCodeName", ""),
+            "market_cap":   round(market_cap_bil, 1),
+            "per":          round(per, 2),
+            "pbr":          round(pbr, 2),
+            "mix":          round(mix, 2),
+            "roe":          round(roe, 1),
+            "roa":          round(roa, 1),
+            "equity_ratio": round(equity_ratio, 1),
+            "score":        score,
+        })
+        checked += 1
+        if checked % 50 == 0:
+            print(f"  {checked}銘柄チェック済... 候補{len(candidates)}件")
+        if len(candidates) >= max_candidates * 3:
+            break
+        time.sleep(0.1)  # API制限対策
+
+    candidates.sort(key=lambda x: x["score"], reverse=True)
+    return candidates[:max_candidates]
+
+
+def _score_stock(mix: float, c: dict, roe: float, roa: float, equity_ratio: float) -> float:
+    """スコアリング（高いほど @shikiho_10 の選定基準に近い）"""
+    score = 0.0
+    if mix <= c["mix_coeff_excellent"]:
+        score += 30
+    elif mix <= c["mix_coeff_max"]:
+        score += 15
+    if roe >= 10:
+        score += 20
+    elif roe >= c["roe_min"]:
+        score += 10
+    if roa >= 5:
+        score += 15
+    elif roa >= c["roa_min"]:
+        score += 8
+    if equity_ratio >= 70:
+        score += 20
+    elif equity_ratio >= c["equity_ratio_min"]:
+        score += 10
+    return score
+
+
+# ══════════════════════════════════════════════════════════
+# STEP 4: 投稿文生成・X投稿
+# ══════════════════════════════════════════════════════════
+
+def generate_post(candidates: list[dict], criteria: dict) -> str:
+    """Claude で投稿文を生成"""
+    if not candidates:
+        return ""
+
+    top = candidates[:3]
+    cands_text = json.dumps(top, ensure_ascii=False, indent=2)
+    pattern = criteria.get("pattern_summary", "")
+
+    prompt = f"""あなたは株式投資家として @FLUX22663176093 のXアカウントで投稿します。
+
+@shikiho_10 の選定パターン: {pattern}
+
+同じ基準でスクリーニングした新候補銘柄:
+{cands_text}
+
+以下の条件でXの投稿文を作成してください:
+- 140字以内の日本語
+- 銘柄コードと銘柄名を含める
+- ミックス係数やROEなど具体的な数値を1〜2個入れる
+- 「@shikiho_10 式スクリーニング」という言葉を入れる
+- 末尾に「#テンバガー #株式投資」を付ける
+- 断定せず「注目」「候補」などの表現を使う
+
+投稿文のみ返してください（説明不要）。"""
+
+    return _call_claude(prompt).strip()
+
+
+def _call_claude(prompt: str) -> str:
     resp = requests.post(
         "https://api.anthropic.com/v1/messages",
         headers={
@@ -103,40 +407,21 @@ def analyze_with_claude(tweets: list[dict]) -> dict:
         },
     )
     resp.raise_for_status()
-
-    raw = resp.json()["content"][0]["text"]
-
-    # JSON部分を抽出
-    match = re.search(r"\{[\s\S]+\}", raw)
-    if match:
-        return json.loads(match.group())
-    return {"summary": raw, "post_text": None}
+    return resp.json()["content"][0]["text"]
 
 
-# ─── X 投稿（OAuth 1.0a） ────────────────────────────────
 def post_to_x(text: str) -> dict:
-    """X APIでツイートを投稿"""
-    import hmac
-    import hashlib
-    import base64
-    import time
-    import urllib.parse
-    import secrets
-
     url = "https://api.twitter.com/2/tweets"
     timestamp = str(int(time.time()))
     nonce = secrets.token_hex(16)
-
     oauth_params = {
-        "oauth_consumer_key": X_API_KEY,
-        "oauth_nonce": nonce,
+        "oauth_consumer_key":     X_API_KEY,
+        "oauth_nonce":            nonce,
         "oauth_signature_method": "HMAC-SHA1",
-        "oauth_timestamp": timestamp,
-        "oauth_token": X_ACCESS_TOKEN,
-        "oauth_version": "1.0",
+        "oauth_timestamp":        timestamp,
+        "oauth_token":            X_ACCESS_TOKEN,
+        "oauth_version":          "1.0",
     }
-
-    # シグネチャ生成
     param_str = "&".join(
         f"{urllib.parse.quote(k, safe='')}={urllib.parse.quote(v, safe='')}"
         for k, v in sorted(oauth_params.items())
@@ -150,85 +435,125 @@ def post_to_x(text: str) -> dict:
         urllib.parse.quote(X_API_SECRET, safe=""),
         urllib.parse.quote(X_ACCESS_SECRET, safe=""),
     ])
-    signature = base64.b64encode(
+    sig = base64.b64encode(
         hmac.new(signing_key.encode(), base_str.encode(), hashlib.sha1).digest()
     ).decode()
-
-    oauth_params["oauth_signature"] = signature
+    oauth_params["oauth_signature"] = sig
     auth_header = "OAuth " + ", ".join(
         f'{urllib.parse.quote(k, safe="")}="{urllib.parse.quote(v, safe="")}"'
         for k, v in sorted(oauth_params.items())
     )
-
-    resp = requests.post(
+    r = requests.post(
         url,
         headers={"Authorization": auth_header, "Content-Type": "application/json"},
         json={"text": text},
     )
-    resp.raise_for_status()
-    return resp.json()
+    r.raise_for_status()
+    return r.json()
 
 
-# ─── Obsidian 用メモ保存 ──────────────────────────────────
-def save_analysis_memo(analysis: dict, tweet_count: int):
+# ══════════════════════════════════════════════════════════
+# STEP 5: Obsidian 用メモ保存
+# ══════════════════════════════════════════════════════════
+
+def save_to_obsidian(criteria: dict, candidates: list[dict], post_text: str):
     today = date.today().isoformat()
-    output_path = OUTPUT_DIR / f"{today}-analysis.md"
+    path = OUTPUT_DIR / f"{today}-stock-picks.md"
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    tickers = ", ".join(analysis.get("tickers", []))
-    themes  = ", ".join(analysis.get("themes", []))
-    post    = analysis.get("post_text", "（投稿なし）")
-    summary = analysis.get("summary", "")
+    c = criteria.get("criteria", {})
+    themes = ", ".join(criteria.get("theme_keywords", []))
+    insights = "\n".join(f"- {i}" for i in criteria.get("key_insights", []))
+    pattern = criteria.get("pattern_summary", "")
+
+    rows = "\n".join(
+        f"| {s['code']} | {s['name']} | {s['market_cap']}億 | "
+        f"{s['per']} | {s['pbr']} | {s['mix']} | "
+        f"{s['roe']}% | {s['equity_ratio']}% | {s['score']} |"
+        for s in candidates
+    )
 
     content = f"""---
 date: {today}
-tags: [x-analysis, 株式投資, 自動生成]
-monitor_account: "@shikiho_10"
-post_account: "@FLUX22663176093"
-tickers: [{tickers}]
-themes: [{themes}]
+tags: [stock-picks, AI-screener, shikiho10-pattern]
+pattern: "{pattern}"
+market_cap_max: {c.get('market_cap_max')}
+mix_coeff_max: {c.get('mix_coeff_max')}
 ---
 
-# X投稿分析 {today}
+# @shikiho_10 式AIスクリーニング結果 {today}
 
-分析対象: {tweet_count}件のツイート
+## 抽出された選定パターン
 
-## まとめ
+{pattern}
 
-{summary}
+### 主な基準
+- 時価総額: {c.get('market_cap_max')}億円以下
+- ミックス係数: {c.get('mix_coeff_max')}以下（◎は{c.get('mix_coeff_excellent')}以下）
+- ROE: {c.get('roe_min')}%以上 / ROA: {c.get('roa_min')}%以上
+- 自己資本比率: {c.get('equity_ratio_min')}%以上
+- 注目テーマ: {themes}
 
-## 自動投稿したツイート
+### 特徴
+{insights}
 
-> {post}
+## 新候補銘柄（スクリーニング結果）
+
+| コード | 銘柄名 | 時価総額 | PER | PBR | ミックス | ROE | 自己資本比率 | スコア |
+|---|---|---|---|---|---|---|---|---|
+{rows}
+
+## 自動投稿した内容（@FLUX22663176093）
+
+> {post_text}
 
 ---
-*自動生成 by Claude API*
+*@shikiho_10 の選定銘柄パターンをClaude AIが学習・応用*
 """
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(content, encoding="utf-8")
-    print(f"メモ保存: {output_path}")
+    path.write_text(content, encoding="utf-8")
+    print(f"Obsidianメモ保存: {path}")
 
 
-# ─── メイン ──────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════
+# メイン
+# ══════════════════════════════════════════════════════════
+
 def main():
-    print("直近7日分のツイートを読み込み中...")
-    tweets = load_recent_tweets(days=7)
-    print(f"  {len(tweets)}件取得")
+    print("=== @shikiho_10 式AI株式ピッカー 起動 ===\n")
 
-    print("Claude APIで分析中...")
-    analysis = analyze_with_claude(tweets)
-    print(f"  まとめ生成完了")
+    # Step 1: データ収集
+    print("【STEP 1】選定銘柄データ収集中...")
+    stocks = load_notion_stocks()
+    posts  = load_feed_posts(days=180)
+    print(f"  Notion: {len(stocks)}銘柄 / X投稿: {len(posts)}件")
 
-    save_analysis_memo(analysis, len(tweets))
+    # Step 2: パターン抽出
+    print("\n【STEP 2】Claude AIでパターン抽出中...")
+    criteria = extract_criteria(stocks, posts)
+    print(f"  パターン: {criteria.get('pattern_summary', '')}")
 
-    post_text = analysis.get("post_text")
+    # Step 3: スクリーニング
+    print("\n【STEP 3】J-Quantsで新候補銘柄スクリーニング中...")
+    known_codes = {s["code"] for s in stocks if s.get("code")}
+    token = jquants_token()
+    candidates = screen_candidates(token, criteria, known_codes)
+    print(f"  候補: {len(candidates)}銘柄")
+    for c in candidates[:3]:
+        print(f"  → {c['code']} {c['name']} MC:{c['market_cap']}億 Mix:{c['mix']} スコア:{c['score']}")
+
+    # Step 4: 投稿
+    print("\n【STEP 4】投稿文生成・X投稿中...")
+    post_text = generate_post(candidates, criteria)
+    print(f"  投稿文: {post_text}")
     if post_text:
-        print(f"Xに投稿中...\n  「{post_text}」")
         result = post_to_x(post_text)
         print(f"  投稿完了: {result}")
-    else:
-        print("投稿文なし（スキップ）")
 
-    print("完了！")
+    # Step 5: Obsidian保存
+    print("\n【STEP 5】Obsidianメモ保存中...")
+    save_to_obsidian(criteria, candidates, post_text)
+
+    print("\n=== 完了 ===")
 
 
 if __name__ == "__main__":
