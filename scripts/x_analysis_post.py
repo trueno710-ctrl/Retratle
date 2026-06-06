@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
 X投稿分析・自動投稿スクリプト
+- 監視アカウント: @shikiho_10（参考・分析元）
+- 投稿先アカウント: @FLUX22663176093（自分のアカウント）
 - data/x-feed/ に蓄積された投稿をClaude APIで分析
-- 投資有益情報をまとめてXに自動投稿
+- 投資有益情報をまとめて @FLUX22663176093 に自動投稿
 - 分析メモをdata/x-posts/に保存（Obsidian連携）
 """
 
@@ -20,7 +22,8 @@ X_API_SECRET      = os.environ["X_API_SECRET"]
 X_ACCESS_TOKEN    = os.environ["X_ACCESS_TOKEN"]
 X_ACCESS_SECRET   = os.environ["X_ACCESS_SECRET"]
 
-TARGET_ACCOUNTS = ["shikiho_10", "FLUX22663176093"]
+MONITOR_ACCOUNTS = ["shikiho_10"]   # 監視・分析するアカウント
+POST_ACCOUNT     = "FLUX22663176093"  # 投稿先（自分のアカウント）
 DATA_DIR   = Path("data/x-feed")
 OUTPUT_DIR = Path("data/x-posts")
 
@@ -33,7 +36,7 @@ def load_recent_tweets(days: int = 7) -> list[dict]:
     cutoff = date.today() - timedelta(days=days)
     tweets = []
 
-    for account in TARGET_ACCOUNTS:
+    for account in MONITOR_ACCOUNTS:
         folder = DATA_DIR / account
         if not folder.exists():
             continue
@@ -67,15 +70,16 @@ def analyze_with_claude(tweets: list[dict]) -> dict:
     )
 
     prompt = f"""あなたは株式投資アナリストです。
-以下は今週の @shikiho_10 および @FLUX22663176093 のX投稿です。
+以下は今週の @shikiho_10 のX投稿です。これを参考に、@FLUX22663176093 として投稿する内容を作成してください。
 
 {tweets_text}
 
 【タスク1】投資に役立つ情報をまとめてください（箇条書き、500字以内）
-【タスク2】Xに投稿する140字以内の日本語ツイートを1つ作成してください。
+【タスク2】@FLUX22663176093 のアカウントでXに投稿する140字以内の日本語ツイートを1つ作成してください。
+  - @shikiho_10 の内容を参考にしつつ、独自の考察・視点を加える
   - 具体的な銘柄・テーマ・数値を含める
   - 「#テンバガー #株式投資 #四季報」のハッシュタグを末尾に付ける
-  - 自分の考察・視点を加える
+  - @shikiho_10 の投稿をそのままコピーせず、自分の言葉でまとめる
 
 以下のJSON形式で返してください：
 {{
@@ -178,7 +182,8 @@ def save_analysis_memo(analysis: dict, tweet_count: int):
     content = f"""---
 date: {today}
 tags: [x-analysis, 株式投資, 自動生成]
-accounts: {TARGET_ACCOUNTS}
+monitor_account: "@shikiho_10"
+post_account: "@FLUX22663176093"
 tickers: [{tickers}]
 themes: [{themes}]
 ---
