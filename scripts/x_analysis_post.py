@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-AI株式ピッカー
-@shikiho_10 の過去選定銘柄から投資基準を学習し、
-同じパターンの新銘柄を自動発掘 → @FLUX22663176093 に投稿
+AI株式ピッカー + Claude Code情報収集
+・@shikiho_10 の過去選定銘柄から投資基準を学習し、同じパターンの新銘柄を自動発掘 → @FLUX22663176093 に投稿
+・@ClaudeCode_love の最新投稿を収集 → Obsidian Knowledge/ に自動保存
 """
 
 import os
@@ -15,7 +15,7 @@ import base64
 import secrets
 import urllib.parse
 import requests
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 # ─── 設定 ────────────────────────────────────────────────
@@ -24,10 +24,17 @@ X_API_KEY           = os.environ["X_API_KEY"]
 X_API_SECRET        = os.environ["X_API_SECRET"]
 X_ACCESS_TOKEN      = os.environ["X_ACCESS_TOKEN"]
 X_ACCESS_SECRET     = os.environ["X_ACCESS_SECRET"]
+X_BEARER_TOKEN      = os.environ.get("X_BEARER_TOKEN", "")
 JQUANTS_REFRESH_TOKEN = os.environ.get("JQUANTS_REFRESH_TOKEN", "")
 JQUANTS_EMAIL       = os.environ.get("JQUANTS_EMAIL", "")
 JQUANTS_PASSWORD    = os.environ.get("JQUANTS_PASSWORD", "")
 NOTION_TOKEN        = os.environ.get("NOTION_TOKEN", "")
+
+# Obsidianボルトパス（環境変数で上書き可）
+OBSIDIAN_VAULT      = Path(os.environ.get(
+    "OBSIDIAN_VAULT_PATH",
+    r"C:\Users\truen\OneDrive\デスクトップ"
+))
 
 NOTION_DS_ID   = "8f7b14d0-2e0f-4f24-b0a8-2b2e467c9a37"   # @shikiho_10 DB
 FEED_DIR       = Path("data/x-feed/shikiho_10")
@@ -35,6 +42,11 @@ OUTPUT_DIR     = Path("data/x-posts")
 CLAUDE_MODEL   = "claude-sonnet-4-6"
 JQUANTS_BASE   = "https://api.jquants.com/v1"
 NOTION_BASE    = "https://api.notion.com/v1"
+X_API_BASE     = "https://api.twitter.com/2"
+
+# @ClaudeCode_love の収集設定
+CLCODE_USERNAME   = "ClaudeCode_love"
+CLCODE_MAX_POSTS  = 20  # 1回の収集件数上限
 
 
 # ══════════════════════════════════════════════════════════
@@ -453,13 +465,129 @@ def post_to_x(text: str) -> dict:
 
 
 # ══════════════════════════════════════════════════════════
-# STEP 5: Obsidian 用メモ保存
+# STEP 5a: @ClaudeCode_love 投稿収集 → Obsidian 保存
+# ══════════════════════════════════════════════════════════
+
+def _x_bearer_headers() -> dict:
+    """X API v2 用 Bearer ヘッダー"""
+    if not X_BEARER_TOKEN:
+        raise RuntimeError("X_BEARER_TOKEN が未設定です（.env に追加してください）")
+    return {"Authorization": f"Bearer {X_BEARER_TOKEN}"}
+
+
+def fetch_clcode_user_id() -> str:
+    """@ClaudeCode_love のユーザーIDを取得"""
+    r = requests.get(
+        f"{X_API_BASE}/users/by/username/{CLCODE_USERNAME}",
+        headers=_x_bearer_headers(),
+        params={"user.fields": "id,name,description"},
+    )
+    r.raise_for_status()
+    return r.json()["data"]["id"]
+
+
+def fetch_clcode_posts(user_id: str, since_days: int = 7) -> list[dict]:
+    """
+    @ClaudeCode_love の直近N日分の投稿を取得。
+    X API v2 の GET /2/users/:id/tweets を使用。
+    """
+    since_dt = (datetime.utcnow() - timedelta(days=since_days)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    params = {
+        "max_results": CLCODE_MAX_POSTS,
+        "start_time": since_dt,
+        "tweet.fields": "created_at,text,public_metrics,entities",
+        "exclude": "retweets,replies",
+    }
+    r = requests.get(
+        f"{X_API_BASE}/users/{user_id}/tweets",
+        headers=_x_bearer_headers(),
+        params=params,
+    )
+    r.raise_for_status()
+    return r.json().get("data", [])
+
+
+def summarize_clcode_posts(posts: list[dict]) -> str:
+    """Claude で投稿群をまとめ、Retratle改善提案を付ける"""
+    posts_text = "\n\n".join(
+        f"[{p.get('created_at','')}]\n{p['text']}" for p in posts
+    )
+    prompt = f"""以下は @ClaudeCode_love（Claude Code Studio）の最新X投稿です。
+
+{posts_text}
+
+次の2点を日本語でまとめてください：
+
+## 1. 今週の主なトピック（箇条書き5件以内）
+
+## 2. Retratle（Next.jsアプリ）に取り入れられる技術・機能の提案（3件）
+各提案は「機能名: 概要（1〜2文）」の形式で。"""
+
+    return _call_claude(prompt).strip()
+
+
+def save_clcode_to_obsidian(posts: list[dict], summary: str) -> Path:
+    """
+    収集した @ClaudeCode_love 投稿と要約を
+    Obsidian の Knowledge/ フォルダに保存する。
+    スクリプトをローカル実行した場合のみ実際に書き込まれる。
+    """
+    today = date.today().isoformat()
+    knowledge_dir = OBSIDIAN_VAULT / "Knowledge"
+    knowledge_dir.mkdir(parents=True, exist_ok=True)
+
+    filepath = knowledge_dir / f"claude-code-studio-{today}.md"
+
+    # 投稿一覧をMarkdownリストに変換
+    posts_md = "\n\n".join(
+        f"### {p.get('created_at', '')[:10]}\n{p['text']}\n"
+        f"❤️ {p.get('public_metrics', {}).get('like_count', 0)}  "
+        f"🔁 {p.get('public_metrics', {}).get('retweet_count', 0)}  "
+        f"👁 {p.get('public_metrics', {}).get('impression_count', 0)}"
+        for p in posts
+    )
+
+    content = f"""---
+date: {today}
+tags: [claude-code, 技術収集, ClaudeCode_love, 自動収集]
+source: "@ClaudeCode_love on X"
+related: [[Knowledge/mistakes]]
+---
+
+# @ClaudeCode_love 収集メモ {today}
+
+{summary}
+
+---
+
+## 収集投稿一覧（直近7日）
+
+{posts_md}
+
+---
+*x_analysis_post.py により自動収集*
+"""
+    filepath.write_text(content, encoding="utf-8")
+    print(f"Obsidian保存完了: {filepath}")
+    return filepath
+
+
+# ══════════════════════════════════════════════════════════
+# STEP 5b: Obsidian 用メモ保存（株式ピッカー結果）
 # ══════════════════════════════════════════════════════════
 
 def save_to_obsidian(criteria: dict, candidates: list[dict], post_text: str):
     today = date.today().isoformat()
-    path = OUTPUT_DIR / f"{today}-stock-picks.md"
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    # Obsidianボルトの Knowledge/ に保存。ローカル実行時のみ書き込まれる
+    knowledge_dir = OBSIDIAN_VAULT / "Knowledge"
+    knowledge_dir.mkdir(parents=True, exist_ok=True)
+    path = knowledge_dir / f"stock-picks-{today}.md"
+    # フォールバック: ボルトパスが存在しない場合はローカルに保存
+    if not (OBSIDIAN_VAULT / "Knowledge").exists():
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        path = OUTPUT_DIR / f"{today}-stock-picks.md"
 
     c = criteria.get("criteria", {})
     themes = ", ".join(criteria.get("theme_keywords", []))
@@ -519,7 +647,7 @@ mix_coeff_max: {c.get('mix_coeff_max')}
 # ══════════════════════════════════════════════════════════
 
 def main():
-    print("=== @shikiho_10 式AI株式ピッカー 起動 ===\n")
+    print("=== @shikiho_10 式AI株式ピッカー + Claude Code情報収集 起動 ===\n")
 
     # Step 1: データ収集
     print("【STEP 1】選定銘柄データ収集中...")
@@ -549,8 +677,23 @@ def main():
         result = post_to_x(post_text)
         print(f"  投稿完了: {result}")
 
-    # Step 5: Obsidian保存
-    print("\n【STEP 5】Obsidianメモ保存中...")
+    # Step 5a: @ClaudeCode_love 投稿収集 → Obsidian
+    print("\n【STEP 5a】@ClaudeCode_love 投稿収集中...")
+    try:
+        clcode_user_id = fetch_clcode_user_id()
+        clcode_posts   = fetch_clcode_posts(clcode_user_id, since_days=7)
+        print(f"  取得: {len(clcode_posts)}件")
+        if clcode_posts:
+            summary = summarize_clcode_posts(clcode_posts)
+            saved_path = save_clcode_to_obsidian(clcode_posts, summary)
+            print(f"  要約:\n{summary[:200]}...")
+    except RuntimeError as e:
+        print(f"  スキップ（{e}）")
+    except Exception as e:
+        print(f"  エラー（{e}）— 株式ピッカー処理は継続")
+
+    # Step 5b: 株式スクリーニング結果 → Obsidian
+    print("\n【STEP 5b】Obsidianメモ保存中（株式ピッカー結果）...")
     save_to_obsidian(criteria, candidates, post_text)
 
     print("\n=== 完了 ===")
