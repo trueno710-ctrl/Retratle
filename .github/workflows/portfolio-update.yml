@@ -31,24 +31,22 @@ jobs:
           JQUANTS_PASSWORD: ${{ secrets.JQUANTS_PASSWORD }}
         run: python scripts/update_portfolio.py
 
-      - name: 完了通知をThreadsに送信
+      - name: 完了通知をSlackに送信
         if: success()
         env:
-          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
-          THREADS_USER_ID:      ${{ secrets.THREADS_USER_ID }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          python scripts/notify_threads.py "【自動実行完了】株式ポートフォリオ更新
-          本日 18:00 のポートフォリオ自動更新が完了しました。
+          python scripts/notify_slack.py "✅ *ポートフォリオ更新 完了*
+          本日 18:00 の株価自動取得が完了しました。
           Notion でご確認ください。
           実行日時: $(TZ='Asia/Tokyo' date +'%Y-%m-%d %H:%M') JST"
 
-      - name: エラー通知をThreadsに送信
+      - name: エラー通知をSlackに送信
         if: failure()
         env:
-          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
-          THREADS_USER_ID:      ${{ secrets.THREADS_USER_ID }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          python scripts/notify_threads.py "【エラー発生】ポートフォリオ更新失敗
+          python scripts/notify_slack.py "❌ *ポートフォリオ更新 エラー発生*
           株価の自動取得でエラーが発生しました。
           GitHub Actions のログを確認してください。
           実行日時: $(TZ='Asia/Tokyo' date +'%Y-%m-%d %H:%M') JST"
