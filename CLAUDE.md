@@ -72,11 +72,12 @@ Vaultのルート/
 
 ## 3. 書き込みフォーマット
 
-ノートには必ずYAMLフロントマターを付与:
+ノートには必ずYAMLフロントマターを付与。**`updated` は毎回必ず記入すること**:
 
 ```
 ---
-date: YYYY-MM-DD
+date: YYYY-MM-DD        # 初回作成日（変更しない）
+updated: YYYY-MM-DD     # 更新のたびに今日の日付に書き換える（必須）
 tags: [relevant, tags]
 project: project-name
 related: [[Other Note]]
@@ -181,15 +182,17 @@ Obsidianを読み書きしたら、何をしたか明示的にユーザーに伝
 - **Obsidian MCP連携**: ローカルClaude Codeから接続設定済み
 - **Vault パス**: `C:\Users\truen\OneDrive\デスクトップ`
 - **作業フォルダ**: `C:\Users\truen\obsidian-claude`
-- **AIに覚えさせたいリスト**: Notionデータベース作成済み（セクション9参照）
+- **AIに覚えさせたいリスト**: Notionデータベース作成済み（セクション9参照、2026-06-09 新DB作成）
+- **Retratle 機能ステータス**: https://app.notion.com/p/dbf217678b2c4e7d85fccc7d7fa41294
 
 ---
 
 ## 9. 「AIに覚えさせたいリスト」処理ルール
 
 ### Notion データベース
-- URL: https://app.notion.com/p/52e74d8aef5b4e869537a1be7707223d
-- データソースID: `f940de99-927b-497c-9818-1e736ed400f3`
+- URL: https://app.notion.com/p/521627c3b5ca4a43b7463446ba76bb81
+- データソースID: `523361b7-160c-4855-b75e-4d675527ad19`
+- 旧DB（使用停止）: https://app.notion.com/p/52e74d8aef5b4e869537a1be7707223d
 
 ### セッション開始時の処理手順
 1. 上記NotionデータベースをMCPで取得し、**ステータスが「未処理」のエントリ**を確認する

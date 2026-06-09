@@ -22,7 +22,7 @@ NOTION_TOKEN = os.environ["NOTION_TOKEN"]
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 
 # AIに覚えさせたいリスト (data source ID)
-INBOX_DB_ID = "f940de99-927b-497c-9818-1e736ed400f3"
+INBOX_DB_ID = "523361b7-160c-4855-b75e-4d675527ad19"
 
 HEADERS = {
     "Authorization": f"Bearer {NOTION_TOKEN}",
@@ -180,6 +180,7 @@ def save_to_knowledge(analysis: dict, target_url: str) -> str:
 
     content = f"""---
 date: {today}
+updated: {today}
 tags: {json.dumps(tags, ensure_ascii=False)}
 source: {target_url}
 category: {analysis['category']}
