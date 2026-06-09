@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write  # data/x-posts/ へのコミットに必要
+      contents: write
 
     steps:
       - name: Checkout
@@ -43,3 +43,26 @@ jobs:
           git add data/x-posts/
           git diff --staged --quiet || git commit -m "chore: Threads投稿メモ自動保存 $(date +'%Y-%m-%d')"
           git push
+
+      - name: 完了通知をThreadsに送信
+        if: success()
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID:      ${{ secrets.THREADS_USER_ID }}
+        run: |
+          python scripts/notify_threads.py "【自動実行完了】AI株式ピッカー
+          @shikiho_10 式スクリーニングが完了しました。
+          新候補銘柄の分析投稿をご確認ください。
+          実行日時: $(TZ='Asia/Tokyo' date +'%Y-%m-%d %H:%M') JST"
+
+      - name: エラー通知をThreadsに送信
+        if: failure()
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID:      ${{ secrets.THREADS_USER_ID }}
+        run: |
+          python scripts/notify_threads.py "【エラー発生】AI株式ピッカー
+          自動スクリーニングでエラーが発生しました。
+          GitHub Actions のログを確認してください。
+          実行日時: $(TZ='Asia/Tokyo' date +'%Y-%m-%d %H:%M') JST"
+

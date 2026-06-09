@@ -1,0 +1,54 @@
+name: 株式ポートフォリオ自動更新
+
+on:
+  schedule:
+    # 毎営業日 18:00 JST = 09:00 UTC（月〜金）
+    - cron: '0 9 * * 1-5'
+  workflow_dispatch:  # 手動実行も可能
+
+jobs:
+  update-portfolio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python セットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 依存ライブラリインストール
+        run: pip install requests
+
+      - name: ポートフォリオ更新
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          JQUANTS_REFRESH_TOKEN: ${{ secrets.JQUANTS_REFRESH_TOKEN }}
+          JQUANTS_EMAIL: ${{ secrets.JQUANTS_EMAIL }}
+          JQUANTS_PASSWORD: ${{ secrets.JQUANTS_PASSWORD }}
+        run: python scripts/update_portfolio.py
+
+      - name: 完了通知をThreadsに送信
+        if: success()
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID:      ${{ secrets.THREADS_USER_ID }}
+        run: |
+          python scripts/notify_threads.py "【自動実行完了】株式ポートフォリオ更新
+          本日 18:00 のポートフォリオ自動更新が完了しました。
+          Notion でご確認ください。
+          実行日時: $(TZ='Asia/Tokyo' date +'%Y-%m-%d %H:%M') JST"
+
+      - name: エラー通知をThreadsに送信
+        if: failure()
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID:      ${{ secrets.THREADS_USER_ID }}
+        run: |
+          python scripts/notify_threads.py "【エラー発生】ポートフォリオ更新失敗
+          株価の自動取得でエラーが発生しました。
+          GitHub Actions のログを確認してください。
+          実行日時: $(TZ='Asia/Tokyo' date +'%Y-%m-%d %H:%M') JST"
