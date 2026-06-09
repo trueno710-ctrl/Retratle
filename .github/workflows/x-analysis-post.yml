@@ -1,4 +1,4 @@
-name: X投稿分析・自動投稿
+name: AI株式ピッカー → Threads自動投稿
 
 on:
   schedule:
@@ -9,7 +9,7 @@ on:
 jobs:
   analyze-and-post:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: write  # data/x-posts/ へのコミットに必要
 
@@ -25,13 +25,15 @@ jobs:
       - name: 依存ライブラリインストール
         run: pip install requests
 
-      - name: X投稿分析・自動投稿
+      - name: AIスクリーニング・Threads投稿
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          X_API_KEY:         ${{ secrets.X_API_KEY }}
-          X_API_SECRET:      ${{ secrets.X_API_SECRET }}
-          X_ACCESS_TOKEN:    ${{ secrets.X_ACCESS_TOKEN }}
-          X_ACCESS_SECRET:   ${{ secrets.X_ACCESS_SECRET }}
+          ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
+          THREADS_ACCESS_TOKEN:  ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID:       ${{ secrets.THREADS_USER_ID }}
+          JQUANTS_REFRESH_TOKEN: ${{ secrets.JQUANTS_REFRESH_TOKEN }}
+          JQUANTS_EMAIL:         ${{ secrets.JQUANTS_EMAIL }}
+          JQUANTS_PASSWORD:      ${{ secrets.JQUANTS_PASSWORD }}
+          NOTION_TOKEN:          ${{ secrets.NOTION_TOKEN }}
         run: python scripts/x_analysis_post.py
 
       - name: 分析メモをコミット（Obsidian同期用）
@@ -39,5 +41,5 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/x-posts/
-          git diff --staged --quiet || git commit -m "chore: X分析メモ自動保存 $(date +'%Y-%m-%d')"
+          git diff --staged --quiet || git commit -m "chore: Threads投稿メモ自動保存 $(date +'%Y-%m-%d')"
           git push

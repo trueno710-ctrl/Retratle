@@ -19,12 +19,10 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 # ─── 設定 ────────────────────────────────────────────────
-ANTHROPIC_API_KEY   = os.environ["ANTHROPIC_API_KEY"]
-X_API_KEY           = os.environ["X_API_KEY"]
-X_API_SECRET        = os.environ["X_API_SECRET"]
-X_ACCESS_TOKEN      = os.environ["X_ACCESS_TOKEN"]
-X_ACCESS_SECRET     = os.environ["X_ACCESS_SECRET"]
-X_BEARER_TOKEN      = os.environ.get("X_BEARER_TOKEN", "")
+ANTHROPIC_API_KEY      = os.environ["ANTHROPIC_API_KEY"]
+THREADS_ACCESS_TOKEN   = os.environ["THREADS_ACCESS_TOKEN"]  # Meta Graph API トークン
+THREADS_USER_ID        = os.environ["THREADS_USER_ID"]       # ThreadsのユーザーID
+X_BEARER_TOKEN         = os.environ.get("X_BEARER_TOKEN", "")  # @shikiho_10 読取用（任意）
 JQUANTS_REFRESH_TOKEN = os.environ.get("JQUANTS_REFRESH_TOKEN", "")
 JQUANTS_EMAIL       = os.environ.get("JQUANTS_EMAIL", "")
 JQUANTS_PASSWORD    = os.environ.get("JQUANTS_PASSWORD", "")
@@ -375,36 +373,53 @@ def _score_stock(mix: float, c: dict, roe: float, roa: float, equity_ratio: floa
 # STEP 4: 投稿文生成・X投稿
 # ══════════════════════════════════════════════════════════
 
-def generate_post(candidates: list[dict], criteria: dict) -> str:
-    """Claude で投稿文を生成"""
+def generate_article(candidates: list[dict], criteria: dict) -> list[str]:
+    """Claude で Threads 長文スレッド記事（3投稿）を生成"""
     if not candidates:
-        return ""
+        return []
 
-    top = candidates[:3]
+    top = candidates[:5]
     cands_text = json.dumps(top, ensure_ascii=False, indent=2)
     pattern = criteria.get("pattern_summary", "")
+    themes = "・".join(criteria.get("theme_keywords", [])[:5])
 
-    prompt = f"""あなたは株式投資家として @FLUX22663176093 のXアカウントで投稿します。
+    prompt = f"""あなたは株式投資家として Threads(@FLUX22663176093) に分析記事を投稿します。
 
-@shikiho_10 の選定パターン: {pattern}
+参考にした選定パターン（@shikiho_10 式）: {pattern}
+注目テーマ: {themes}
 
-同じ基準でスクリーニングした新候補銘柄:
+AIスクリーニング結果（新候補銘柄）:
 {cands_text}
 
-以下の条件でXの投稿文を作成してください:
-- 140字以内の日本語
-- 銘柄コードと銘柄名を含める
-- ミックス係数やROEなど具体的な数値を1〜2個入れる
-- 「@shikiho_10 式スクリーニング」という言葉を入れる
-- 末尾に「#テンバガー #株式投資」を付ける
-- 断定せず「注目」「候補」などの表現を使う
+Threadsのスレッド形式で以下の3つの投稿を作成してください（各500字以内）。
 
-投稿文のみ返してください（説明不要）。"""
+【投稿1: 導入・スクリーニング概要】
+- 今回のスクリーニングの目的と方法を簡潔に説明
+- 「@shikiho_10 式の基準」という表現を使う
+- 時価総額・ミックス係数などの基準値を含める
 
-    return _call_claude(prompt).strip()
+【投稿2: 候補銘柄の詳細分析】
+- 上位2〜3銘柄について個別に解説
+- 銘柄コード・銘柄名・数値（MC・PER・PBR・Mix・ROE）を記載
+- なぜ注目に値するかの考察を加える
+
+【投稿3: 総括・免責】
+- 共通テーマや特徴まとめ
+- 「#テンバガー #株式投資 #四季報 #スクリーニング」のタグ
+- 「本投稿は投資助言ではありません」の一文
+
+JSON形式で返してください：
+{{"post1": "投稿1本文", "post2": "投稿2本文", "post3": "投稿3本文"}}"""
+
+    raw = _call_claude(prompt, max_tokens=2048)
+    match = re.search(r"\{[\s\S]+\}", raw)
+    if match:
+        data = json.loads(match.group())
+        return [data.get("post1", ""), data.get("post2", ""), data.get("post3", "")]
+    return [raw[:500]]
 
 
-def _call_claude(prompt: str) -> str:
+def _call_claude(prompt: str, max_tokens: int = 1024) -> str:
     resp = requests.post(
         "https://api.anthropic.com/v1/messages",
         headers={
@@ -414,7 +429,7 @@ def _call_claude(prompt: str) -> str:
         },
         json={
             "model": CLAUDE_MODEL,
-            "max_tokens": 1024,
+            "max_tokens": max_tokens,
             "messages": [{"role": "user", "content": prompt}],
         },
     )
@@ -422,46 +437,37 @@ def _call_claude(prompt: str) -> str:
     return resp.json()["content"][0]["text"]
 
 
-def post_to_x(text: str) -> dict:
-    url = "https://api.twitter.com/2/tweets"
-    timestamp = str(int(time.time()))
-    nonce = secrets.token_hex(16)
-    oauth_params = {
-        "oauth_consumer_key":     X_API_KEY,
-        "oauth_nonce":            nonce,
-        "oauth_signature_method": "HMAC-SHA1",
-        "oauth_timestamp":        timestamp,
-        "oauth_token":            X_ACCESS_TOKEN,
-        "oauth_version":          "1.0",
-    }
-    param_str = "&".join(
-        f"{urllib.parse.quote(k, safe='')}={urllib.parse.quote(v, safe='')}"
-        for k, v in sorted(oauth_params.items())
-    )
-    base_str = "&".join([
-        "POST",
-        urllib.parse.quote(url, safe=""),
-        urllib.parse.quote(param_str, safe=""),
-    ])
-    signing_key = "&".join([
-        urllib.parse.quote(X_API_SECRET, safe=""),
-        urllib.parse.quote(X_ACCESS_SECRET, safe=""),
-    ])
-    sig = base64.b64encode(
-        hmac.new(signing_key.encode(), base_str.encode(), hashlib.sha1).digest()
-    ).decode()
-    oauth_params["oauth_signature"] = sig
-    auth_header = "OAuth " + ", ".join(
-        f'{urllib.parse.quote(k, safe="")}="{urllib.parse.quote(v, safe="")}"'
-        for k, v in sorted(oauth_params.items())
-    )
-    r = requests.post(
-        url,
-        headers={"Authorization": auth_header, "Content-Type": "application/json"},
-        json={"text": text},
-    )
-    r.raise_for_status()
-    return r.json()
+def post_to_threads(posts: list[str]) -> list[str]:
+    """Threads API でスレッド形式投稿（3連投稿）"""
+    base_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}"
+    published_ids = []
+
+    for i, text in enumerate(posts):
+        if not text.strip():
+            continue
+        # コンテナ作成
+        params = {
+            "media_type": "TEXT",
+            "text": text,
+            "access_token": THREADS_ACCESS_TOKEN,
+        }
+        if published_ids:
+            params["reply_to_id"] = published_ids[-1]
+        r = requests.post(f"{base_url}/threads", params=params)
+        r.raise_for_status()
+        creation_id = r.json()["id"]
+        time.sleep(2)
+        # 公開
+        r2 = requests.post(
+            f"{base_url}/threads_publish",
+            params={"creation_id": creation_id, "access_token": THREADS_ACCESS_TOKEN},
+        )
+        r2.raise_for_status()
+        published_ids.append(r2.json()["id"])
+        print(f"  Threads投稿{i+1}完了")
+        time.sleep(3)
+
+    return published_ids
 
 
 # ══════════════════════════════════════════════════════════
@@ -669,13 +675,14 @@ def main():
     for c in candidates[:3]:
         print(f"  → {c['code']} {c['name']} MC:{c['market_cap']}億 Mix:{c['mix']} スコア:{c['score']}")
 
-    # Step 4: 投稿
-    print("\n【STEP 4】投稿文生成・X投稿中...")
-    post_text = generate_post(candidates, criteria)
-    print(f"  投稿文: {post_text}")
-    if post_text:
-        result = post_to_x(post_text)
-        print(f"  投稿完了: {result}")
+    # Step 4: Threads長文記事生成・投稿
+    print("\n【STEP 4】Threads長文記事生成・投稿中...")
+    article_posts = generate_article(candidates, criteria)
+    post_text = "\n\n---\n\n".join(article_posts)
+    for i, p in enumerate(article_posts):
+        print(f"  投稿{i+1}: {p[:60]}...")
+    published_ids = post_to_threads(article_posts)
+    print(f"  Threads投稿完了: {len(published_ids)}件")
 
     # Step 5a: @ClaudeCode_love 投稿収集 → Obsidian
     print("\n【STEP 5a】@ClaudeCode_love 投稿収集中...")
