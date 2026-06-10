@@ -61,23 +61,33 @@ export async function POST(req: NextRequest) {
             { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
             {
               type: "text",
-              text: `あなたはFXトレーダーのアシスタントです。このTradingViewのスクリーンショットを詳細に分析してください。
+              text: `あなたは以下の戦略を使うFXトレーダーのアシスタントです。
 
+【使用戦略】
+- LuxAlgo SMC（Smart Money Concepts）: BOS/CHoCH/OrderBlock/EQH/EQL/FVG/Premium-Discount Zone
+- Lorentzian Classification（ML）: 緑ラベル=Buy、赤ラベル=Sell
+- EMA 25（短期）/ EMA 75（中期）/ EMA 200（長期・大局フィルター）
+
+【ロング条件】価格>200EMA、25EMA>75EMA、Bullish CHoCH/BOS、Bullish OBまたはDiscount Zone、Lorentzian緑
+【ショート条件】価格<200EMA、25EMA<75EMA、Bearish CHoCH/BOS、Bearish OBまたはPremium Zone、Lorentzian赤
+【決済】逆Lorentzianシグナル、逆CHoCH、EQH/EQLターゲット到達、EMAクロス
+
+このTradingViewスクリーンショットを上記戦略の観点で分析してください。
 以下のJSON形式のみで返してください（コードブロック・説明文不要）:
 {
-  "date": "YYYY-MM-DD（画面左上やチャートの日付から。不明なら今日）",
+  "date": "YYYY-MM-DD（画面左上・チャートの日付から。不明なら今日）",
   "currencyPair": "USD/JPY or EUR/JPY or GBP/JPY or EUR/USD or GBP/USD or AUD/JPY or NZD/USD or AUD/USD or USD/CHF or USD/CAD or その他",
-  "direction": "買い（ロング） or 売り（ショート）（ポジションマーカーの色・方向から判断。緑/上向き=ロング、赤/下向き=ショート）",
+  "direction": "買い（ロング） or 売り（ショート）（ポジションマーカー：緑/上=ロング、赤/下=ショート）",
   "timeframe": "1分足 or 5分足 or 15分足 or 1時間足 or 4時間足 or 日足 or 週足（チャートタイトルから）",
-  "entryPrice": 数値（エントリー価格。ポジションラインや吹き出しから。不明はnull）,
+  "entryPrice": 数値（ポジションラインや吹き出しから。不明はnull）,
   "exitPrice": 数値（決済価格。不明はnull）,
-  "lot": 数値（ロット数。吹き出しの数字から。不明はnull）,
-  "pnlPips": 数値（損益pips。吹き出しの「+XX pips」「-XX pips」から。不明はnull）,
+  "lot": 数値（吹き出しのロット数。不明はnull）,
+  "pnlPips": 数値（吹き出しの「+XX pips」「-XX pips」から。不明はnull）,
   "pnlJpy": 数値（損益円。不明はnull）,
   "stopLossPips": 数値（損切り幅pips。不明はnull）,
   "result": "勝ち or 負け or 引き分け or （未決済なら空文字）",
-  "entryBasis": "エントリー根拠を日本語で詳しく説明。以下の観点を含めること：①チャートパターン（EQH/EQL、CHoCH、BOS等のSMC概念が見えれば）②価格帯（フィボナッチレベル、サポレジ等）③トレンド方向（上昇/下降/レンジ）④エントリータイミングの根拠",
-  "memo": "その他の補足（インジケーター、注目ライン、特記事項等）"
+  "entryBasis": "戦略の観点でエントリー根拠を詳述（日本語）。以下を必ず含める：①EMAの配列状態（25/75/200の位置関係）②SMC構造（BOS/CHoCHの方向、直近の構造転換）③エントリーゾーン（OrderBlock・FVG・Premium/Discount・フィボレベル）④Lorentzianシグナルの有無・色⑤EQH/EQLの位置（流動性ターゲット）",
+  "memo": "チャート上で目立つライン・注目ポイント・反省点（日本語）"
 }`,
             },
           ],
