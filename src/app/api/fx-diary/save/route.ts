@@ -11,30 +11,30 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const body = await req.json()
-  const { date, currencyPair, direction, lot, entryPrice, exitPrice, pnlPips, pnlJpy, result, memo, tradeName } = body
+  const b = await req.json()
+  const title = b.tradeName || `${b.currencyPair} ${b.direction} ${b.date}`
 
-  const properties: Record<string, unknown> = {
-    "トレード": {
-      title: [{ text: { content: tradeName || `${currencyPair} ${direction} ${date}` } }],
-    },
-    "通貨ペア": direction ? { select: { name: currencyPair } } : undefined,
-    "方向": direction ? { select: { name: direction } } : undefined,
-    "日付": date ? { date: { start: date } } : undefined,
-    "ロット数": lot != null ? { number: lot } : undefined,
-    "エントリー価格": entryPrice != null ? { number: entryPrice } : undefined,
-    "決済価格": exitPrice != null ? { number: exitPrice } : undefined,
-    "損益_pips": pnlPips != null ? { number: pnlPips } : undefined,
-    "損益_円": pnlJpy != null ? { number: pnlJpy } : undefined,
-    "結果": result ? { select: { name: result } } : undefined,
-    "分析・メモ": memo ? { rich_text: [{ text: { content: memo } }] } : undefined,
+  const props: Record<string, unknown> = {
+    "トレード": { title: [{ text: { content: title } }] },
+    "日付": b.date ? { date: { start: b.date } } : undefined,
+    "通貨ペア": b.currencyPair ? { select: { name: b.currencyPair } } : undefined,
+    "方向": b.direction ? { select: { name: b.direction } } : undefined,
+    "セッション": b.session ? { select: { name: b.session } } : undefined,
+    "曜日": b.dayOfWeek ? { select: { name: b.dayOfWeek } } : undefined,
+    "時間足": b.timeframe ? { select: { name: b.timeframe } } : undefined,
+    "ロット数": b.lot != null ? { number: b.lot } : undefined,
+    "エントリー価格": b.entryPrice != null ? { number: b.entryPrice } : undefined,
+    "決済価格": b.exitPrice != null ? { number: b.exitPrice } : undefined,
+    "損切り幅_pips": b.stopLossPips != null ? { number: b.stopLossPips } : undefined,
+    "損益_pips": b.pnlPips != null ? { number: b.pnlPips } : undefined,
+    "損益_円": b.pnlJpy != null ? { number: b.pnlJpy } : undefined,
+    "結果": b.result ? { select: { name: b.result } } : undefined,
+    "エントリー根拠": b.entryBasis ? { rich_text: [{ text: { content: b.entryBasis } }] } : undefined,
+    "分析・メモ": b.memo ? { rich_text: [{ text: { content: b.memo } }] } : undefined,
     "更新日": { date: { start: new Date().toISOString().slice(0, 10) } },
   }
 
-  // Remove undefined values
-  const cleanProps = Object.fromEntries(
-    Object.entries(properties).filter(([, v]) => v !== undefined)
-  )
+  const cleanProps = Object.fromEntries(Object.entries(props).filter(([, v]) => v !== undefined))
 
   const res = await fetch("https://api.notion.com/v1/pages", {
     method: "POST",
@@ -43,10 +43,7 @@ export async function POST(req: NextRequest) {
       "Content-Type": "application/json",
       "Notion-Version": "2022-06-28",
     },
-    body: JSON.stringify({
-      parent: { database_id: NOTION_DATABASE_ID },
-      properties: cleanProps,
-    }),
+    body: JSON.stringify({ parent: { database_id: NOTION_DATABASE_ID }, properties: cleanProps }),
   })
 
   if (!res.ok) {
