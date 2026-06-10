@@ -6,6 +6,9 @@ on:
     - cron: "0 23 * * *"
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -21,6 +24,20 @@ jobs:
 
       - name: Install dependencies
         run: pip install requests anthropic
+
+      - name: Check secrets
+        run: |
+          if [ -z "$NOTION_TOKEN" ]; then
+            echo "::error::NOTION_TOKEN が設定されていません。Settings → Secrets → Actions で追加してください。"
+            exit 1
+          fi
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY が設定されていません。Settings → Secrets → Actions で追加してください。"
+            exit 1
+          fi
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Run Notion sync
         env:
