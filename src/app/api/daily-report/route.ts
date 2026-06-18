@@ -156,7 +156,7 @@ export async function POST(req: Request) {
 
         if (process.env.ANTHROPIC_API_KEY) {
           try {
-            recs = await analyzeMinistryPost(post.text, ministry.name, ministry.sector, ministry.policyThemes2026)
+            recs = await analyzeMinistryPost(post.text, ministry.name, ministry.sector) as unknown as ShikihoRecommendation[]
           } catch {
             recs = getMockPicksForMinistry(ministry.name, ministry.sector, post.text)
           }

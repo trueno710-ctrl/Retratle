@@ -61,10 +61,9 @@ export async function GET(req: Request) {
         try {
           const result = await generatePriceReport(
             stock.ticker, stock.name, stock.changePercent, stock.price,
-            (stock as ReturnType<typeof getMockMovers>[number]).marketCapBillion || 0,
             (stock as ReturnType<typeof getMockMovers>[number]).context || ""
           )
-          reportData = result
+          reportData = { report: result, xPost: result.slice(0, 140) }
         } catch {
           reportData = getMockReport(stock as ReturnType<typeof getMockMovers>[number])
         }

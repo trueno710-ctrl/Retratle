@@ -27,6 +27,7 @@ const navSections = [
       { href: "/tenbagger",       label: "テンバガー研究所", icon: "🚀" },
       { href: "/weekly-news",     label: "週次レポート",     icon: "📰" },
       { href: "/price-alerts",    label: "値動きアラート",   icon: "⚡" },
+      { href: "/fx-diary",        label: "FXトレード日記",   icon: "📈" },
     ],
   },
   {

@@ -1,0 +1,54 @@
+name: Daily Notion Sync
+
+on:
+  schedule:
+    # 毎日 JST 8:00 (UTC 23:00 前日)
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests anthropic
+
+      - name: Check secrets
+        run: |
+          if [ -z "$NOTION_TOKEN" ]; then
+            echo "::error::NOTION_TOKEN が設定されていません。Settings → Secrets → Actions で追加してください。"
+            exit 1
+          fi
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY が設定されていません。Settings → Secrets → Actions で追加してください。"
+            exit 1
+          fi
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Run Notion sync
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/notion_daily_sync.py
+
+      - name: Commit saved articles
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Knowledge/
+          git diff --staged --quiet || git commit -m "chore: daily notion sync $(date +'%Y-%m-%d')"
+          git push

@@ -1,0 +1,65 @@
+name: AI株式ピッカー → Threads自動投稿
+
+on:
+  schedule:
+    # 毎週火曜・金曜 18:00 JST = 09:00 UTC
+    - cron: '0 9 * * 2,5'
+  workflow_dispatch:  # 手動実行可
+
+jobs:
+  analyze-and-post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python セットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 依存ライブラリインストール
+        run: pip install requests
+
+      - name: AIスクリーニング・Threads投稿
+        env:
+          ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
+          THREADS_ACCESS_TOKEN:  ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID:       ${{ secrets.THREADS_USER_ID }}
+          JQUANTS_REFRESH_TOKEN: ${{ secrets.JQUANTS_REFRESH_TOKEN }}
+          JQUANTS_EMAIL:         ${{ secrets.JQUANTS_EMAIL }}
+          JQUANTS_PASSWORD:      ${{ secrets.JQUANTS_PASSWORD }}
+          NOTION_TOKEN:          ${{ secrets.NOTION_TOKEN }}
+        run: python scripts/x_analysis_post.py
+
+      - name: 分析メモをコミット（Obsidian同期用）
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/x-posts/
+          git diff --staged --quiet || git commit -m "chore: Threads投稿メモ自動保存 $(date +'%Y-%m-%d')"
+          git push
+
+      - name: 完了通知をSlackに送信
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          python scripts/notify_slack.py "✅ *AI株式ピッカー 完了*
+          @shikiho_10 式スクリーニングが完了しました。
+          新候補銘柄の分析投稿をThreadsでご確認ください。
+          実行日時: $(TZ='Asia/Tokyo' date +'%Y-%m-%d %H:%M') JST"
+
+      - name: エラー通知をSlackに送信
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          python scripts/notify_slack.py "❌ *AI株式ピッカー エラー発生*
+          自動スクリーニングでエラーが発生しました。
+          GitHub Actions のログを確認してください。
+          実行日時: $(TZ='Asia/Tokyo' date +'%Y-%m-%d %H:%M') JST"

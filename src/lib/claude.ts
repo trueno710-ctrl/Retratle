@@ -398,6 +398,38 @@ export interface StockRecommendation {
   expectedImpact: string
 }
 
+export interface ShikihoRecommendation {
+  ticker: string
+  name: string
+  marketCapBillion: number
+  per: number
+  pbr: number
+  roe: number
+  roa: number
+  equityRatio: number
+  dividendYield: number
+  mixCoefficient: number
+  hasZeroDebt: boolean
+  themes: string[]
+  reason: string
+  confidence: "高" | "中" | "低"
+  catalysts: string[]
+  tenbaggerScore: number
+}
+
+export interface TenbaggerAnalysis {
+  ticker: string
+  score: number
+  analysis?: string
+  catalysts: string[]
+  shikihoComment?: string
+  mixCoefficient?: number
+  themes?: string[]
+  targetMultiple?: string
+  riskFactors?: string[]
+  [key: string]: unknown
+}
+
 export async function analyzeMinistryPost(
   post: string,
   ministry: string,
