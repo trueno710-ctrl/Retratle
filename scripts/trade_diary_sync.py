@@ -15,7 +15,6 @@ import base64
 import os
 import re
 from datetime import datetime, timezone, timedelta
-from email.utils import parsedate_to_datetime
 
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -26,7 +25,7 @@ GMAIL_REFRESH_TOKEN = os.environ["GMAIL_REFRESH_TOKEN"]
 
 SEARCH_QUERY = os.environ.get(
     "TRADE_DIARY_SEARCH_QUERY",
-    'newer_than:2d -label:TradeDiarySynced (subject:"Position ID" OR subject:"Fill price" OR subject:"Trade confirmation")',
+    "from:trade@alerts.ctrader.com newer_than:2d -label:TradeDiarySynced",
 )
 SYNCED_LABEL_NAME = "TradeDiarySynced"
 
