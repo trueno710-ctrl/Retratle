@@ -46,3 +46,7 @@ next-env.d.ts
 
 # Daily report data (regenerated at runtime)
 data/daily-reports.json
+
+# Python bytecode cache
+__pycache__/
+*.pyc
