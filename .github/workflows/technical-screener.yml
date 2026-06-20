@@ -1,0 +1,48 @@
+name: テクニカルスクリーニング（RSI・出来高急増）
+
+on:
+  workflow_dispatch:  # 手動実行
+
+jobs:
+  technical-screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python セットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 依存ライブラリインストール
+        run: pip install requests
+
+      - name: テクニカルスクリーニング実行
+        env:
+          JQUANTS_REFRESH_TOKEN: ${{ secrets.JQUANTS_REFRESH_TOKEN }}
+          JQUANTS_EMAIL: ${{ secrets.JQUANTS_EMAIL }}
+          JQUANTS_PASSWORD: ${{ secrets.JQUANTS_PASSWORD }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: python scripts/technical_screener.py
+
+      - name: 変更をコミット
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/x-posts/
+          git diff --cached --quiet || git commit -m "テクニカルスクリーニング結果を追加"
+          git push
+
+      - name: エラー通知をSlackに送信
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          python scripts/notify_slack.py "❌ *テクニカルスクリーニング エラー発生*
+          RSI・出来高急増スクリーニングでエラーが発生しました。
+          GitHub Actions のログを確認してください。
+          実行日時: $(TZ='Asia/Tokyo' date +'%Y-%m-%d %H:%M') JST"
