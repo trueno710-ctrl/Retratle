@@ -1,0 +1,35 @@
+name: Daily Stock Data Fetch (J-Quants)
+
+on:
+  schedule:
+    # 平日 JST 16:00（東証大引け後）= UTC 07:00
+    - cron: "0 7 * * 1-5"
+  workflow_dispatch:
+    # 手動実行も可能
+
+jobs:
+  fetch-stock-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Fetch stock data from J-Quants
+        env:
+          JQUANTS_REFRESH_TOKEN: ${{ secrets.JQUANTS_REFRESH_TOKEN }}
+        run: node scripts/fetch_stock_data.js
+
+      - name: Commit and push data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/stock-quotes/
+          git diff --staged --quiet || git commit -m "chore: 株価データを自動取得 ($(date +'%Y-%m-%d'))"
+          git push
