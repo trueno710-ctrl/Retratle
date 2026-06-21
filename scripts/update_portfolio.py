@@ -22,6 +22,10 @@ JQUANTS_PASSWORD = os.environ.get("JQUANTS_PASSWORD", "")
 NOTION_BASE = "https://api.notion.com/v1"
 JQUANTS_BASE = "https://api.jquants.com/v1"
 
+ATR_PERIOD = 14
+ATR_STOP_LOSS_MULT = 2.0   # 損切り = 取得価額 - 2×ATR14
+ATR_TARGET_MULT = 3.0      # 目標値 = 取得価額 + 3×ATR14
+
 
 # ─── 保有銘柄定義 ────────────────────────────────────────
 @dataclass
@@ -118,6 +122,41 @@ def nearest_trading_day_before(target: date, quotes: list[dict]) -> float | None
     return None
 
 
+# ─── ATRベース目標・損切り計算 ─────────────────────────────
+def calc_atr(quotes: list[dict], period: int = ATR_PERIOD) -> float | None:
+    """日足（古い→新しい順）からATR(period)を計算"""
+    valid = [q for q in quotes if q.get("High") is not None and q.get("Low") is not None and q.get("Close") is not None]
+    if len(valid) < period + 1:
+        return None
+    trs = []
+    for i in range(1, len(valid)):
+        high, low = valid[i]["High"], valid[i]["Low"]
+        prev_close = valid[i - 1]["Close"]
+        trs.append(max(high - low, abs(high - prev_close), abs(low - prev_close)))
+    return sum(trs[-period:]) / period
+
+
+def calc_target_stop(cost: float, atr: float | None) -> tuple[float | None, float | None]:
+    """取得価額 ± ATR から目標価格・損切り価格を算出"""
+    if atr is None:
+        return None, None
+    target = cost + ATR_TARGET_MULT * atr
+    stop_loss = cost - ATR_STOP_LOSS_MULT * atr
+    return target, stop_loss
+
+
+def status_flag(current: float | None, target: float | None, stop_loss: float | None) -> str:
+    if current is None:
+        return "-"
+    if target is not None and current >= target:
+        return "🎯目標達成"
+    if stop_loss is not None and current <= stop_loss:
+        return "⛔損切りライン割れ"
+    if stop_loss is not None and current <= stop_loss * 1.03:
+        return "⚠️損切り接近"
+    return ""
+
+
 # ─── 損益計算 ────────────────────────────────────────────
 def calc_pl(cost: float, current: float, qty: int) -> int:
     return round((current - cost) * qty)
@@ -143,28 +182,31 @@ def notion_headers() -> dict:
     }
 
 
-def build_row(h: Holding, current: float | None, prev_day: float | None, prev_month: float | None) -> str:
+def fmt_price(val: float | None) -> str:
+    return f"{val:,.0f}" if val is not None else "-"
+
+
+def build_row(
+    h: Holding,
+    current: float | None,
+    prev_day: float | None,
+    prev_month: float | None,
+    target: float | None,
+    stop_loss: float | None,
+) -> str:
     if current is None:
-        return f"| {h.name} | {h.code} | {h.quantity:,} | {h.cost:,.0f} | - | - | - | - |"
+        return f"| {h.name} | {h.code} | {h.quantity:,} | {h.cost:,.0f} | - | - | - | - | - | - | - |"
 
     current_str = f"{current:,.0f}"
     day_chg = fmt_chg(((current - prev_day) / prev_day * 100) if prev_day else None)
     month_chg = fmt_chg(((current - prev_month) / prev_month * 100) if prev_month else None)
     pl = calc_pl(h.cost, current, h.quantity)
     pl_str = fmt_pl(pl)
-    return f"| {h.name} | {h.code} | {h.quantity:,} | {h.cost:,.0f} | {current_str} | {day_chg} | {month_chg} | {pl_str} |"
-
-
-def build_margin_row(h: Holding, current: float | None, prev_day: float | None, prev_month: float | None) -> str:
-    if current is None:
-        return f"| {h.name} | {h.code} | {h.quantity:,} | {h.cost:,.0f} | - | - | - | - |"
-
-    current_str = f"{current:,.0f}"
-    day_chg = fmt_chg(((current - prev_day) / prev_day * 100) if prev_day else None)
-    month_chg = fmt_chg(((current - prev_month) / prev_month * 100) if prev_month else None)
-    pl = calc_pl(h.cost, current, h.quantity)
-    pl_str = fmt_pl(pl)
-    return f"| {h.name} | {h.code} | {h.quantity:,} | {h.cost:,.0f} | {current_str} | {day_chg} | {month_chg} | {pl_str} |"
+    status = status_flag(current, target, stop_loss)
+    return (
+        f"| {h.name} | {h.code} | {h.quantity:,} | {h.cost:,.0f} | {current_str} | {day_chg} | "
+        f"{month_chg} | {pl_str} | {fmt_price(target)} | {fmt_price(stop_loss)} | {status} |"
+    )
 
 
 def update_notion_page(content: str):
@@ -255,44 +297,54 @@ def main():
     spot_pl_total = 0
     margin_rows = []
     margin_pl_total = 0
+    alerts = []
 
     for h in HOLDINGS:
         quotes = fetch_prices(access_token, h.code, from_date, today_str)
+        sorted_quotes = sorted(quotes, key=lambda q: q["Date"])
         _, current = get_latest_close(quotes)
         prev_day_price = nearest_trading_day_before(prev_day, quotes)
         prev_month_price = nearest_trading_day_before(prev_month, quotes)
 
+        atr = calc_atr(sorted_quotes)
+        target, stop_loss = calc_target_stop(h.cost, atr)
+
+        row = build_row(h, current, prev_day_price, prev_month_price, target, stop_loss)
         if h.is_margin:
-            row = build_margin_row(h, current, prev_day_price, prev_month_price)
             margin_rows.append(row)
             if current:
                 margin_pl_total += calc_pl(h.cost, current, h.quantity)
         else:
-            row = build_row(h, current, prev_day_price, prev_month_price)
             spot_rows.append(row)
             if current:
                 spot_pl_total += calc_pl(h.cost, current, h.quantity)
 
-        print(f"  {h.name}({h.code}): {current}円")
+        status = status_flag(current, target, stop_loss)
+        if status in ("🎯目標達成", "⛔損切りライン割れ"):
+            alerts.append(f"{status} {h.name}({h.code}) 現在値:{fmt_price(current)}円 目標:{fmt_price(target)}円 損切り:{fmt_price(stop_loss)}円")
+
+        print(f"  {h.name}({h.code}): {current}円 [目標:{fmt_price(target)} / 損切り:{fmt_price(stop_loss)}]")
 
     total_pl = spot_pl_total + margin_pl_total
 
     content = f"""最終更新: {today_str} 18:00 *(毎日18:00 自動更新)*
 
+目標価格・損切り価格はATR（{ATR_PERIOD}日平均値幅）から自動算出: 目標=取得価額+{ATR_TARGET_MULT}×ATR、損切り=取得価額-{ATR_STOP_LOSS_MULT}×ATR
+
 ## 現物株
 
 評価損益: **{fmt_pl(spot_pl_total)}**
 
-| 銘柄 | コード | 保有数 | 取得価額(円) | 現在値(円) | 前日比 | 前月比 | 損益(円) |
-| --- | --- | --- | --- | --- | --- | --- | --- |
+| 銘柄 | コード | 保有数 | 取得価額(円) | 現在値(円) | 前日比 | 前月比 | 損益(円) | 目標価格(円) | 損切り価格(円) | 状態 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 {chr(10).join(spot_rows)}
 
 ## 信用建玉
 
 評価損益: **{fmt_pl(margin_pl_total)}**
 
-| 銘柄 | コード | 数量 | 平均建値(円) | 現在値(円) | 前日比 | 前月比 | 評価損益(円) |
-| --- | --- | --- | --- | --- | --- | --- | --- |
+| 銘柄 | コード | 数量 | 平均建値(円) | 現在値(円) | 前日比 | 前月比 | 評価損益(円) | 目標価格(円) | 損切り価格(円) | 状態 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 {chr(10).join(margin_rows)}
 
 ## 合計
@@ -310,6 +362,15 @@ def main():
     print("Notion ページを更新中...")
     update_notion_page(content)
     print("完了！")
+
+    if alerts:
+        message = "🚨 *ポートフォリオ アラート*\n" + "\n".join(alerts)
+        try:
+            from notify_slack import notify
+            notify(message)
+        except KeyError:
+            print("SLACK_WEBHOOK_URL未設定のためアラート通知スキップ")
+            print(message)
 
 
 if __name__ == "__main__":

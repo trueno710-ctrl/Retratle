@@ -29,6 +29,7 @@ jobs:
           JQUANTS_REFRESH_TOKEN: ${{ secrets.JQUANTS_REFRESH_TOKEN }}
           JQUANTS_EMAIL: ${{ secrets.JQUANTS_EMAIL }}
           JQUANTS_PASSWORD: ${{ secrets.JQUANTS_PASSWORD }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: python scripts/update_portfolio.py
 
       - name: 完了通知をSlackに送信
