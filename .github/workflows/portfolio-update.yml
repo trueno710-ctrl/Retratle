@@ -26,9 +26,7 @@ jobs:
       - name: ポートフォリオ更新
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          JQUANTS_REFRESH_TOKEN: ${{ secrets.JQUANTS_REFRESH_TOKEN }}
-          JQUANTS_EMAIL: ${{ secrets.JQUANTS_EMAIL }}
-          JQUANTS_PASSWORD: ${{ secrets.JQUANTS_PASSWORD }}
+          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: python scripts/update_portfolio.py
 

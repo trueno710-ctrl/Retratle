@@ -14,13 +14,11 @@ from dataclasses import dataclass, field
 NOTION_TOKEN = os.environ["NOTION_TOKEN"]
 NOTION_PAGE_ID = "36dc573ff8f481abac02ebf436a948bf"
 
-# J-Quants: リフレッシュトークン優先、なければメール/パスワード
-JQUANTS_REFRESH_TOKEN = os.environ.get("JQUANTS_REFRESH_TOKEN", "")
-JQUANTS_EMAIL = os.environ.get("JQUANTS_EMAIL", "")
-JQUANTS_PASSWORD = os.environ.get("JQUANTS_PASSWORD", "")
+# J-Quants V2: APIキー認証
+JQUANTS_API_KEY = os.environ["JQUANTS_API_KEY"]
 
 NOTION_BASE = "https://api.notion.com/v1"
-JQUANTS_BASE = "https://api.jquants.com/v1"
+JQUANTS_BASE = "https://api.jquants.com/v2"
 
 ATR_PERIOD = 14
 ATR_STOP_LOSS_MULT = 2.0   # 損切り = 取得価額 - 2×ATR14
@@ -53,68 +51,45 @@ HOLDINGS: list[Holding] = [
 ]
 
 
-# ─── J-Quants 認証 ───────────────────────────────────────
-def jquants_get_refresh_token_via_login() -> str:
-    resp = requests.post(
-        f"{JQUANTS_BASE}/token/auth_user",
-        json={"mailaddress": JQUANTS_EMAIL, "password": JQUANTS_PASSWORD},
-    )
-    resp.raise_for_status()
-    return resp.json()["refreshToken"]
-
-
-def jquants_get_access_token(refresh_token: str) -> str:
-    resp = requests.post(
-        f"{JQUANTS_BASE}/token/auth_refresh",
-        params={"refreshtoken": refresh_token},
-    )
-    resp.raise_for_status()
-    return resp.json()["idToken"]
-
-
-def jquants_authenticate() -> str:
-    """リフレッシュトークン → IDトークン（アクセストークン）を取得"""
-    if JQUANTS_REFRESH_TOKEN:
-        print("リフレッシュトークンで認証中...")
-        try:
-            return jquants_get_access_token(JQUANTS_REFRESH_TOKEN)
-        except Exception as e:
-            print(f"リフレッシュトークン失敗: {e}")
-            if not JQUANTS_EMAIL:
-                raise RuntimeError("JQUANTS_REFRESH_TOKEN が無効で JQUANTS_EMAIL も未設定です") from e
-    print("メール/パスワードで認証中...")
-    refresh = jquants_get_refresh_token_via_login()
-    return jquants_get_access_token(refresh)
-
-
-# ─── 株価取得 ────────────────────────────────────────────
-def fetch_prices(token: str, code: str, from_date: str, to_date: str) -> list[dict]:
-    resp = requests.get(
-        f"{JQUANTS_BASE}/prices/daily_quotes",
-        headers={"Authorization": f"Bearer {token}"},
-        params={"code": f"{code}", "from": from_date, "to": to_date},
-    )
-    resp.raise_for_status()
-    return resp.json().get("daily_quotes", [])
+# ─── 株価取得（J-Quants V2: APIキー認証）─────────────────────
+def fetch_prices(code: str, from_date: str, to_date: str) -> list[dict]:
+    quotes = []
+    pagination_key = None
+    while True:
+        params = {"code": code, "from": from_date, "to": to_date}
+        if pagination_key:
+            params["pagination_key"] = pagination_key
+        resp = requests.get(
+            f"{JQUANTS_BASE}/equities/bars/daily",
+            headers={"x-api-key": JQUANTS_API_KEY},
+            params=params,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        quotes.extend(body.get("data", []))
+        pagination_key = body.get("pagination_key")
+        if not pagination_key:
+            break
+    return quotes
 
 
 def get_close(quotes: list[dict], target_date: str) -> float | None:
     for q in quotes:
-        if q.get("Date") == target_date:
-            return q.get("Close")
+        if q.get("date") == target_date:
+            return q.get("close")
     return None
 
 
 def get_latest_close(quotes: list[dict]) -> tuple[str, float] | tuple[None, None]:
     if not quotes:
         return None, None
-    latest = sorted(quotes, key=lambda q: q["Date"])[-1]
-    return latest["Date"], latest.get("Close")
+    latest = sorted(quotes, key=lambda q: q["date"])[-1]
+    return latest["date"], latest.get("close")
 
 
 def nearest_trading_day_before(target: date, quotes: list[dict]) -> float | None:
     """target日以前で最も近い終値を返す"""
-    available = {q["Date"]: q.get("Close") for q in quotes if q.get("Close") is not None}
+    available = {q["date"]: q.get("close") for q in quotes if q.get("close") is not None}
     for i in range(10):
         d = (target - timedelta(days=i)).strftime("%Y-%m-%d")
         if d in available:
@@ -125,13 +100,13 @@ def nearest_trading_day_before(target: date, quotes: list[dict]) -> float | None
 # ─── ATRベース目標・損切り計算 ─────────────────────────────
 def calc_atr(quotes: list[dict], period: int = ATR_PERIOD) -> float | None:
     """日足（古い→新しい順）からATR(period)を計算"""
-    valid = [q for q in quotes if q.get("High") is not None and q.get("Low") is not None and q.get("Close") is not None]
+    valid = [q for q in quotes if q.get("high") is not None and q.get("low") is not None and q.get("close") is not None]
     if len(valid) < period + 1:
         return None
     trs = []
     for i in range(1, len(valid)):
-        high, low = valid[i]["High"], valid[i]["Low"]
-        prev_close = valid[i - 1]["Close"]
+        high, low = valid[i]["high"], valid[i]["low"]
+        prev_close = valid[i - 1]["close"]
         trs.append(max(high - low, abs(high - prev_close), abs(low - prev_close)))
     return sum(trs[-period:]) / period
 
@@ -289,8 +264,6 @@ def main():
 
     from_date = (today - timedelta(days=40)).strftime("%Y-%m-%d")
 
-    access_token = jquants_authenticate()
-
     print(f"株価取得中（{from_date} → {today_str}）...")
 
     spot_rows = []
@@ -300,8 +273,8 @@ def main():
     alerts = []
 
     for h in HOLDINGS:
-        quotes = fetch_prices(access_token, h.code, from_date, today_str)
-        sorted_quotes = sorted(quotes, key=lambda q: q["Date"])
+        quotes = fetch_prices(h.code, from_date, today_str)
+        sorted_quotes = sorted(quotes, key=lambda q: q["date"])
         _, current = get_latest_close(quotes)
         prev_day_price = nearest_trading_day_before(prev_day, quotes)
         prev_month_price = nearest_trading_day_before(prev_month, quotes)
