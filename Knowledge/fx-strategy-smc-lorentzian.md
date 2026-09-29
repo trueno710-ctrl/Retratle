@@ -1,6 +1,6 @@
 ---
 date: 2026-06-10
-updated: 2026-06-10
+updated: 2026-09-29
 tags: [fx, trading, strategy, smc, lorentzian, ema]
 project: fx-diary
 ---
@@ -85,3 +85,10 @@ project: fx-diary
 - フィボ0.382（0.58606）付近にBearish OB
 - 200 EMAより下でショートバイアス
 - Lorentzian赤ラベル点灯後にエントリー → -37.7 pips（損切り）
+
+## チャート例（2026-09-29 AUD/USD）
+- 1時間足・4時間足ともに200 EMAより下、25 < 75 EMAでショート条件の大局は一致
+- 0.7000（心理的節目）＋EQL/PWL付近を下抜けるBOSで**ブレイクアウト売り**（Premium戻りではない）
+- ポジション: 売り 1.54 lot @0.69951 / SL 0.70356（-40.5 pips、PDH直下）/ TP 0.69531（+42.0 pips、4H需要ゾーン上端）
+- RR 約1:1.04。直下にPML（約0.6983）とWeak Low（約0.6978）があり反発に注意
+- 管理案: PML明確割れで建値ストップ、0.7000上に戻されたらブレイク失敗として撤退検討
