@@ -1,6 +1,6 @@
 @AGENTS.md
 
-> 最終更新: 2026-07-04
+> 最終更新: 2026-10-22
 
 # Claude × Obsidian 連携ルール
 
@@ -197,7 +197,7 @@ Obsidianを読み書きしたら、何をしたか明示的にユーザーに伝
 ### 設定済みの自動化
 - **Amazon荷物 → Googleカレンダー自動登録**: Zapierスキル作成済み（zapier.com でZap作成が必要）
 - **Obsidian MCP連携**: ローカルClaude Codeから接続設定済み
-- **Vault パス**: `C:\Users\truen\OneDrive\デスクトップ`
+- **Vault パス**: `C:\Users\truen\iCloudDrive\Claude`（2026-10-22 OneDriveデスクトップから移設）
 - **作業フォルダ**: `C:\Users\truen\obsidian-claude`
 - **AIに覚えさせたいリスト**: Notionデータベース作成済み（セクション9参照、2026-06-09 新DB作成）
 - **Retratle 機能ステータス**: https://app.notion.com/p/dbf217678b2c4e7d85fccc7d7fa41294
