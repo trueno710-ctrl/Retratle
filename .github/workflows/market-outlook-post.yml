@@ -1,0 +1,76 @@
+name: 市場見通し → Threads半自動投稿
+
+# 下書き: 平日朝に自動作成して data/market-posts/ にコミット → Slack に通知
+# 投稿:   内容を確認（必要なら GitHub 上で直す）してから「Run workflow」で mode=publish を実行
+on:
+  schedule:
+    # 平日 07:00 JST = 前日 22:00 UTC（日〜木）
+    - cron: '0 22 * * 0-4'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'draft=下書き作成 / publish=下書きを投稿'
+        required: true
+        default: 'publish'
+        type: choice
+        options: [draft, publish]
+      date:
+        description: '下書きの日付 YYYY-MM-DD（空欄なら今日）'
+        required: false
+
+jobs:
+  market-outlook:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python セットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 依存ライブラリインストール
+        run: pip install requests
+
+      - name: 下書き作成 / 投稿
+        env:
+          ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
+          FRED_API_KEY:         ${{ secrets.FRED_API_KEY }}
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID:      ${{ secrets.THREADS_USER_ID }}
+          MODE: ${{ github.event.inputs.mode || 'draft' }}
+          DAY:  ${{ github.event.inputs.date }}
+        run: python scripts/market_outlook_post.py "$MODE" $DAY
+
+      - name: 下書き・投稿記録をコミット（Obsidian同期用）
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/market-posts/
+          git diff --staged --quiet || git commit -m "chore: 市場見通し ${{ github.event.inputs.mode || 'draft' }} $(TZ='Asia/Tokyo' date +'%Y-%m-%d')"
+          git push
+
+      - name: 完了通知をSlackに送信
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ "${{ github.event.inputs.mode || 'draft' }}" = "draft" ]; then
+            python scripts/notify_slack.py "📝 *市場見通しの下書きができました*
+          data/market-posts/ を確認して、Actions の「市場見通し → Threads半自動投稿」から mode=publish で投稿してください。"
+          else
+            python scripts/notify_slack.py "✅ *市場見通しを Threads に投稿しました*"
+          fi
+
+      - name: エラー通知をSlackに送信
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          python scripts/notify_slack.py "❌ *市場見通し エラー発生*
+          GitHub Actions のログを確認してください。"
