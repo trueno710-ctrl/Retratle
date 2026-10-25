@@ -1,9 +1,9 @@
 ---
 date: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-25
 tags: [notion, obsidian, rules]
 project: retratle
-related: [[mistakes]]
+related: [[mistakes]], [[2026-10-23-notion-sorting-rules-proposal]]
 ---
 
 # 「AIに覚えさせたいリスト」を種別ごとに振り分ける
