@@ -1,6 +1,6 @@
 @AGENTS.md
 
-> 最終更新: 2026-10-23
+> 最終更新: 2026-10-25
 
 # Claude × Obsidian 連携ルール
 
@@ -184,6 +184,8 @@ Obsidianを読み書きしたら、何をしたか明示的にユーザーに伝
 - 使用ツール: Obsidian, Claude Code, Next.js(Retratle), Zapier, Notion
 - OS: Windows 11
 - GitHubリポジトリ: trueno710-ctrl/Retratle
+- 車: GR86（将来はランドクルーザーに乗りたい）
+- 進行中: 静岡市で注文住宅を計画中（大人1〜2人・1階LDK・ビルトインガレージ1台・土地込み5,000万円以内、Projects/custom-house.md）
 
 ### YouTube チャンネル
 - 開設予定あり
