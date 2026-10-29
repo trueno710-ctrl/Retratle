@@ -8,9 +8,8 @@ on:
         default: 'true'
         type: choice
         options: ['true', 'false']
-  # Enable the schedule after validating sources and configuring secrets.
-  # schedule:
-  #   - cron: '17 */3 * * *'
+  schedule:
+    - cron: '17 */3 * * *'
 permissions:
   contents: read
 jobs:
