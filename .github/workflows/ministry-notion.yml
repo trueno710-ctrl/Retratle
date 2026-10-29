@@ -1,0 +1,34 @@
+name: Ministry news to Notion (prototype)
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Preview without Notion writes'
+        required: true
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+  # Enable the schedule after validating sources and configuring secrets.
+  # schedule:
+  #   - cron: '17 */3 * * *'
+permissions:
+  contents: read
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+      NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+      DRY_RUN: ${{ inputs.dry_run || 'true' }}
+      MAX_ITEMS_PER_RUN: '10'
+      LOOKBACK_HOURS: '48'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run ministry news monitor
+        run: python automation/ministry_notion.py
